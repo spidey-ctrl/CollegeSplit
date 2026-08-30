@@ -42,12 +42,44 @@ enum SplitMethod {
       );
 }
 
+/// What the backend resolved a Participant to against the User's Contacts.
+enum MatchKind { autoLinked, ambiguous }
+
+class ParticipantMatch {
+  const ParticipantMatch({
+    required this.kind,
+    this.contactId,
+    this.contactName,
+  });
+
+  final MatchKind kind;
+
+  /// Non-null when [kind] is [MatchKind.autoLinked].
+  final String? contactId;
+
+  /// Non-null when [kind] is [MatchKind.autoLinked].
+  final String? contactName;
+
+  bool get isAutoLinked => kind == MatchKind.autoLinked;
+
+  factory ParticipantMatch.fromJson(Map<String, dynamic> json) {
+    final kind = json['kind'] as String;
+    return ParticipantMatch(
+      kind: kind == 'ambiguous' ? MatchKind.ambiguous : MatchKind.autoLinked,
+      contactId: json['contactId'] as String?,
+      contactName: json['contactName'] as String?,
+    );
+  }
+}
+
 class ExpenseParticipant {
   const ExpenseParticipant({
     required this.name,
     this.sharePaise = 0,
     this.isUser = false,
     this.ratio,
+    this.phoneNumber,
+    this.contactMatch,
   });
 
   final String name;
@@ -56,6 +88,12 @@ class ExpenseParticipant {
 
   /// Only meaningful for a Ratio split (integer weight > 0).
   final int? ratio;
+
+  /// Optional phone number used to resolve this Participant to a Contact.
+  final String? phoneNumber;
+
+  /// How the backend resolved this Participant on creation (null = ephemeral).
+  final ParticipantMatch? contactMatch;
 }
 
 class Expense {
@@ -93,6 +131,11 @@ class Expense {
                 name: p['name'] as String,
                 sharePaise: p['sharePaise'] as int,
                 isUser: p['isUser'] as bool,
+                contactMatch: p['contactMatch'] == null
+                    ? null
+                    : ParticipantMatch.fromJson(
+                        p['contactMatch'] as Map<String, dynamic>,
+                      ),
               ),
             )
             .toList(),
@@ -130,6 +173,22 @@ class Ledger {
             .toList(),
         totalOwedToUserPaise: json['totalOwedToUserPaise'] as int,
         totalUserOwesPaise: json['totalUserOwesPaise'] as int,
+      );
+}
+
+/// A Contact is a person the User splits with repeatedly, auto-accumulated
+/// from naming a Participant on 2+ Expenses (see CONTEXT.md).
+class Contact {
+  const Contact({required this.id, required this.name, this.phoneNumber});
+
+  final String id;
+  final String name;
+  final String? phoneNumber;
+
+  factory Contact.fromJson(Map<String, dynamic> json) => Contact(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        phoneNumber: json['phoneNumber'] as String?,
       );
 }
 
@@ -244,6 +303,8 @@ class ExpenseService {
             .map(
               (p) => {
                 'name': p.name,
+                if (p.phoneNumber != null && p.phoneNumber!.isNotEmpty)
+                  'phoneNumber': p.phoneNumber,
                 if (p.ratio != null) 'ratio': p.ratio,
                 if (splitMethod == SplitMethod.adhoc) 'sharePaise': p.sharePaise,
                 'isUser': p.isUser,
@@ -269,6 +330,22 @@ class ExpenseService {
       throw Exception('GET /ledger failed (${res.statusCode})');
     }
     return Ledger.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  /// Fetches the signed-in User's accumulated Contacts.
+  Future<List<Contact>> fetchContacts() async {
+    final token = await _idToken();
+    final res = await http.get(
+      Uri.parse('$_apiBaseUrl/contacts'),
+      headers: _headers(token),
+    );
+    if (res.statusCode != 200) {
+      throw Exception('GET /contacts failed (${res.statusCode})');
+    }
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list
+        .map((c) => Contact.fromJson(c as Map<String, dynamic>))
+        .toList();
   }
 
   /// Sends recorded audio (WAV) to the voice pipeline and returns a prefilled

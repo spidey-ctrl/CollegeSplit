@@ -9,6 +9,9 @@ export interface ExpenseParticipantDto {
   ratio?: number;
   sharePaise?: number;
   isUser?: boolean;
+  // Optional phone, used for local Contact matching (ticket 05). Name-only
+  // Participants (no phone) are treated as ephemeral and never fuzzy-matched.
+  phoneNumber?: string;
 }
 
 export interface CreateExpenseDto {
@@ -27,7 +30,14 @@ export interface ParticipantView {
   name: string;
   sharePaise: number;
   isUser: boolean;
+  contactMatch?: ParticipantMatch;
 }
+
+/** How a Participant's name resolved against the User's Contact list (ticket 05). */
+export type ParticipantMatch =
+  | { kind: 'autoLinked'; contactId: string; contactName: string }
+  | { kind: 'ambiguous'; matches: Array<{ contactId: string; name: string }> }
+  | { kind: 'ephemeral' };
 
 export interface ExpenseView {
   id: string;
@@ -68,5 +78,19 @@ export function assertCreateExpenseDto(body: unknown): asserts body is CreateExp
   }
   if (b.participants !== undefined && !Array.isArray(b.participants)) {
     throw new BadRequestException('participants must be an array');
+  }
+  if (Array.isArray(b.participants)) {
+    for (const p of b.participants as unknown[]) {
+      if (typeof p !== 'object' || p === null) {
+        throw new BadRequestException('each participant must be an object');
+      }
+      const pp = p as Record<string, unknown>;
+      if (typeof pp.name !== 'string') {
+        throw new BadRequestException('each participant needs a name');
+      }
+      if (pp.phoneNumber !== undefined && typeof pp.phoneNumber !== 'string') {
+        throw new BadRequestException('participant phoneNumber must be a string');
+      }
+    }
   }
 }

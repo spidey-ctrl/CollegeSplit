@@ -28,6 +28,8 @@ class _ParticipantRow {
   final TextEditingController name = TextEditingController();
   // Ratio weight, or Adhoc rupees amount, depending on the split method.
   final TextEditingController value = TextEditingController();
+  // Optional phone number used to resolve this Participant to a Contact.
+  final TextEditingController phone = TextEditingController();
 }
 
 class _AddExpenseScreenState extends State<AddExpenseScreen> {
@@ -38,6 +40,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   bool _busy = false;
   String? _error;
   String? _success;
+  // Human-readable summary of how each non-ephemeral Participant resolved to a
+  // Contact after the last submit (e.g. auto-linked or needs disambiguation).
+  List<String> _resolved = const [];
   // Field names the voice capture couldn't confidently extract. These stay
   // blank and get a highlighted border until the User fills them in.
   final Set<String> _highlighted = {};
@@ -78,6 +83,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     for (final p in _participants) {
       p.name.dispose();
       p.value.dispose();
+      p.phone.dispose();
     }
     super.dispose();
   }
@@ -122,10 +128,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       final row = _participants[i];
       final name = row.name.text.trim();
       if (name.isEmpty) continue;
+      final phone = row.phone.text.trim();
 
       switch (_splitMethod) {
         case SplitMethod.equal:
-          participants.add(ExpenseParticipant(name: name));
+          participants.add(
+            ExpenseParticipant(name: name, phoneNumber: phone.isEmpty ? null : phone),
+          );
           break;
         case SplitMethod.ratio:
           final ratio = int.tryParse(row.value.text.trim());
@@ -133,7 +142,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             setState(() => _error = 'Give each Participant a ratio weight > 0');
             return;
           }
-          participants.add(ExpenseParticipant(name: name, ratio: ratio));
+          participants.add(
+            ExpenseParticipant(
+              name: name,
+              ratio: ratio,
+              phoneNumber: phone.isEmpty ? null : phone,
+            ),
+          );
           break;
         case SplitMethod.adhoc:
           final share = _rupeesToPaise(row.value.text);
@@ -142,7 +157,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 _error = 'Give each Participant an exact amount > 0');
             return;
           }
-          participants.add(ExpenseParticipant(name: name, sharePaise: share));
+          participants.add(
+            ExpenseParticipant(
+              name: name,
+              sharePaise: share,
+              phoneNumber: phone.isEmpty ? null : phone,
+            ),
+          );
           break;
       }
     }
@@ -163,6 +184,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       setState(() {
         _success =
             'Added ₹${_paiseToRupees(expense.amountPaise)} (${expense.category.label})';
+        _resolved = expense.participants
+            .where((p) => p.contactMatch != null)
+            .map((p) {
+              final m = p.contactMatch!;
+              return m.isAutoLinked
+                  ? '${p.name} → saved as contact ${m.contactName}'
+                  : '${p.name} → matches several contacts, please pick one';
+            })
+            .toList();
         _amountController.clear();
         _participants.clear();
         _participants.add(_ParticipantRow());
@@ -261,7 +291,23 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           if (_success != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Text(_success!, style: TextStyle(color: colorScheme.primary)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _success!,
+                    style: TextStyle(color: colorScheme.primary),
+                  ),
+                  for (final line in _resolved)
+                    Text(
+                      line,
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
             ),
           FilledButton.icon(
             onPressed: _busy ? null : _submit,
@@ -337,34 +383,48 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            flex: showValue ? 3 : 4,
-            child: TextField(
-              controller: row.name,
-              decoration: const InputDecoration(labelText: 'Name'),
-            ),
-          ),
-          if (showValue) ...[
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 2,
-              child: TextField(
-                controller: row.value,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+          Row(
+            children: [
+              Expanded(
+                flex: showValue ? 3 : 4,
+                child: TextField(
+                  controller: row.name,
+                  decoration: const InputDecoration(labelText: 'Name'),
                 ),
-                decoration: InputDecoration(labelText: valueLabel),
               ),
+              if (showValue) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    controller: row.value,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(labelText: valueLabel),
+                  ),
+                ),
+              ],
+              IconButton(
+                tooltip: 'Remove',
+                onPressed: _participants.length > 1
+                    ? () => setState(() => _participants.removeAt(index))
+                    : null,
+                icon: const Icon(Icons.remove_circle_outline),
+              ),
+            ],
+          ),
+          TextField(
+            controller: row.phone,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              labelText: 'Phone (optional)',
+              hintText: 'To link to a Contact',
+              isDense: true,
             ),
-          ],
-          IconButton(
-            tooltip: 'Remove',
-            onPressed: _participants.length > 1
-                ? () => setState(() => _participants.removeAt(index))
-                : null,
-            icon: const Icon(Icons.remove_circle_outline),
           ),
         ],
       ),

@@ -8,12 +8,18 @@ import {
 import {
   assertCreateExpenseDto,
   type ExpenseView,
+  type ParticipantMatch,
 } from './dto.js';
 import { computeShares, type SplitMethod } from './split.js';
+import { ContactsService } from '../contacts/contacts.service.js';
+import { resolveParticipant } from '../contacts/match.js';
 
 @Injectable()
 export class ExpensesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly contacts: ContactsService,
+  ) {}
 
   async create(decoded: DecodedIdToken, body: unknown): Promise<ExpenseView> {
     assertCreateExpenseDto(body);
@@ -24,13 +30,13 @@ export class ExpensesService {
     const amountPaise = body.amountPaise;
     const category = body.category;
     const splitMethod = body.splitMethod;
-    const participants = body.participants ?? [];
+    const participantInputs = body.participants ?? [];
     const isUserPayer = body.isUserPayer ?? true;
 
     const shares = computeShares(
       splitMethod as SplitMethod,
       amountPaise,
-      participants.map((p) => ({ ...p })),
+      participantInputs.map((p) => ({ ...p })),
     );
 
     const payerName =
@@ -56,7 +62,65 @@ export class ExpensesService {
       include: { participants: true },
     });
 
-    return this.toView(expense);
+    return this.attachContacts(decoded.uid, expense, participantInputs);
+  }
+
+  /**
+   * After an Expense is stored, (a) auto-create Contacts for Participants the
+   * User has named on 2+ Expenses, and (b) resolve each Participant's name
+   * against the User's Contacts, returning the match (autoLink/ambiguous) on
+   * the view. Never blocks or guesses — ambiguous names surface for the User.
+   */
+  private async attachContacts(
+    userId: string,
+    expense: {
+      id: string;
+      amount: number;
+      category: string;
+      payerName: string;
+      isUserPayer: boolean;
+      splitMethod: string;
+      createdAt: Date;
+      participants: Array<{ name: string; sharePaise: number; isUser: boolean }>;
+    },
+    participantInputs: Array<{ name: string; phoneNumber?: string }>,
+  ): Promise<ExpenseView> {
+    // Per-name phone captured from the request (the identity anchor for matching).
+    const requestPhones = new Map<string, string>();
+    for (const p of participantInputs) {
+      const nm = p.name?.trim();
+      const ph = p.phoneNumber?.trim();
+      if (nm && ph) requestPhones.set(nm, ph);
+    }
+
+    // Auto-create Contacts once a name is used on 2+ Expenses.
+    const uniqueNamed = expense.participants
+      .filter((s) => !s.isUser)
+      .map((s) => s.name.trim())
+      .filter((n) => n.length > 0);
+    for (const name of new Set(uniqueNamed)) {
+      await this.contacts.ensureFromExpense(
+        userId,
+        name,
+        requestPhones.get(name) ?? null,
+      );
+    }
+
+    const contacts = await this.contacts.list(userId);
+    const matches = new Map<string, ParticipantMatch>();
+    for (const s of expense.participants) {
+      if (s.isUser) continue;
+      const name = s.name.trim();
+      if (!name) continue;
+      const result = resolveParticipant({
+        name,
+        phoneNumber: requestPhones.get(name) ?? null,
+        contacts,
+      });
+      if (result.kind !== 'ephemeral') matches.set(name, result);
+    }
+
+    return this.toView(expense, matches);
   }
 
   private async provisionUser(decoded: DecodedIdToken) {
@@ -72,16 +136,19 @@ export class ExpensesService {
     });
   }
 
-  private toView(expense: {
-    id: string;
-    amount: number;
-    category: string;
-    payerName: string;
-    isUserPayer: boolean;
-    splitMethod: string;
-    createdAt: Date;
-    participants: Array<{ name: string; sharePaise: number; isUser: boolean }>;
-  }): ExpenseView {
+  private toView(
+    expense: {
+      id: string;
+      amount: number;
+      category: string;
+      payerName: string;
+      isUserPayer: boolean;
+      splitMethod: string;
+      createdAt: Date;
+      participants: Array<{ name: string; sharePaise: number; isUser: boolean }>;
+    },
+    matches?: Map<string, ParticipantMatch>,
+  ): ExpenseView {
     return {
       id: expense.id,
       amountPaise: expense.amount,
@@ -90,11 +157,18 @@ export class ExpensesService {
       isUserPayer: expense.isUserPayer,
       splitMethod: expense.splitMethod,
       createdAt: expense.createdAt.toISOString(),
-      participants: expense.participants.map((p) => ({
-        name: p.name,
-        sharePaise: p.sharePaise,
-        isUser: p.isUser,
-      })),
+      participants: expense.participants.map((p) => {
+        const view: ExpenseView['participants'][number] = {
+          name: p.name,
+          sharePaise: p.sharePaise,
+          isUser: p.isUser,
+        };
+        if (!p.isUser) {
+          const match = matches?.get(p.name.trim());
+          if (match) view.contactMatch = match;
+        }
+        return view;
+      }),
     };
   }
 }

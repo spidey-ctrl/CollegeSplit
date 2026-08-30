@@ -37,6 +37,7 @@ model User {
   phoneNumber String?
   createdAt   DateTime @default(now())
   expenses    Expense[]
+  contacts    Contact[]
 }
 
 // A single spend event entered by a User (the ledger owner), with an amount
@@ -74,4 +75,28 @@ model Participant {
   name       String
   sharePaise Int // in paise; only meaningful when isUser is false
   isUser     Boolean @default(false)
+}
+
+// A person a User has split an Expense with more than once, remembered for
+// reuse across future Expenses. Accumulates automatically — no explicit setup.
+// Each Contact belongs to exactly one User's own list; lists are never shared
+// or merged between Users. A phone number is the optional identity anchor that
+// makes the Contact eligible for name-based local matching (ticket 05); without
+// one the Contact is name-only and intended to stay ephemeral.
+model Contact {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  // Optional private phone number, editable by the User. The anchor for
+  // recognizing the same person across this User's Expenses.
+  phoneNumber   String?
+  // Ticket 11 fills this in when the Contact is resolved to a registered User
+  // by exact phone match. This ticket only carries the field.
+  resolvedUserId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@unique([userId, name])
 }

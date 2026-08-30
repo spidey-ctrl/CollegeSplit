@@ -4,6 +4,7 @@ import type { DecodedIdToken } from 'firebase-admin/auth';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ExpensesService } from '../expenses/expenses.service.js';
 import { LedgerService } from './ledger.service.js';
+import { ContactsService } from '../contacts/contacts.service.js';
 
 describe('Expenses + Ledger (ticket 02, real DB)', () => {
   let prisma: PrismaService;
@@ -26,7 +27,7 @@ describe('Expenses + Ledger (ticket 02, real DB)', () => {
 
   beforeAll(() => {
     prisma = new PrismaService();
-    expenses = new ExpensesService(prisma);
+    expenses = new ExpensesService(prisma, new ContactsService(prisma));
     ledger = new LedgerService(prisma);
   });
 

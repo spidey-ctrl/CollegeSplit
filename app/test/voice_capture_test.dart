@@ -128,10 +128,12 @@ Future<void> _driveRecording(
   await tester.pumpAndSettle();
 }
 
-/// The confirm button sits below the fold on a small test viewport, so scroll
-/// it into view before tapping.
+/// The confirm button sits below the fold on the default small test viewport,
+/// so enlarge the viewport so the whole form (and button) is visible/tappable.
 Future<void> _tapAddExpense(WidgetTester tester) async {
-  await tester.ensureVisible(find.text('Add Expense'));
+  tester.view.physicalSize = const Size(800, 1800);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
   await tester.pumpAndSettle();
   await tester.tap(find.text('Add Expense'));
   await tester.pumpAndSettle();
