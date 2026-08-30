@@ -58,6 +58,10 @@ model Expense {
   // Whether the Payer is the owning User (drives the direction of Balances).
   isUserPayer Boolean       @default(true)
   splitMethod SplitMethod
+  // Whether the User has settled the running Balance this Expense contributed
+  // to (ticket 07). Settled Expenses are excluded from the derived Ledger;
+  // editing or deleting one reopens the Balance it belonged to.
+  settled     Boolean       @default(false)
   createdAt   DateTime      @default(now())
   participants Participant[]
 }

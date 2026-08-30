@@ -103,15 +103,62 @@ class LedgerScreenState extends State<LedgerScreen> {
       leading: CircleAvatar(child: Text(entry.counterparty.characters.first)),
       title: Text(entry.counterparty),
       subtitle: Text(positive ? 'owes you' : 'you owe'),
-      trailing: Text(
-        _rupees(entry.balancePaise.abs()),
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.bold,
-          fontSize: 16,
-        ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _rupees(entry.balancePaise.abs()),
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          if (entry.contactId != null) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: 'Settle balance with ${entry.counterparty}',
+              icon: const Icon(Icons.check_circle_outline),
+              onPressed: () => _confirmAndSettle(entry),
+            ),
+          ],
+        ],
       ),
     );
+  }
+
+  Future<void> _confirmAndSettle(LedgerEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Settle balance with ${entry.counterparty}?'),
+        content: Text(
+          'This records that you have been paid outside the app and zeroes '
+          'your whole running balance with ${entry.counterparty}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Settle'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || entry.contactId == null) return;
+
+    try {
+      final updated = await widget.service.settleCounterparty(entry.contactId!);
+      setState(() {
+        _ledger = updated;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() => _error = e.toString());
+    }
   }
 }
 

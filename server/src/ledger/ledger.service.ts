@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 export interface LedgerEntry {
@@ -6,6 +6,10 @@ export interface LedgerEntry {
   // Positive = this counterparty owes the User (User is owed).
   // Negative = the User owes this counterparty.
   balancePaise: number;
+  // The id of the User's Contact for this counterparty, when one exists
+  // (i.e. the person the User has split with 2+ times). Null for ephemeral
+  // counterparties, which therefore cannot be settled (ticket 07).
+  contactId: string | null;
 }
 
 export interface LedgerView {
@@ -31,8 +35,9 @@ export class LedgerService {
   constructor(private readonly prisma: PrismaService) {}
 
   async ledger(userId: string): Promise<LedgerView> {
+    // Settled Expenses (ticket 07) no longer contribute to the running Balance.
     const expenses = await this.prisma.expense.findMany({
-      where: { userId },
+      where: { userId, settled: false },
       include: { participants: true },
       orderBy: { createdAt: 'asc' },
     });
@@ -42,6 +47,7 @@ export class LedgerService {
     for (const expense of expenses) {
       if (expense.isUserPayer) {
         for (const p of expense.participants) {
+          if (p.isUser) continue;
           const key = p.name;
           balance.set(key, (balance.get(key) ?? 0) + p.sharePaise);
         }
@@ -55,6 +61,10 @@ export class LedgerService {
       }
     }
 
+    // Map each counterparty name to the User's Contact (if any) so the client
+    // can offer a Settle action only against a remembered person.
+    const contactIdByName = await this.contactIdByCounterpartyName(userId);
+
     // Drop zero balances so counterparties with nothing owed don't clutter the
     // Ledger screen.
     const entries: LedgerEntry[] = Array.from(balance.entries())
@@ -62,6 +72,7 @@ export class LedgerService {
       .map(([counterparty, balancePaise]) => ({
         counterparty,
         balancePaise,
+        contactId: contactIdByName.get(counterparty) ?? null,
       }))
       .sort((a, b) => b.balancePaise - a.balancePaise);
 
@@ -77,5 +88,66 @@ export class LedgerService {
       totalOwedToUserPaise: totalOwedToUser,
       totalUserOwesPaise: totalUserOwes,
     };
+  }
+
+  /**
+   * Settles the User's whole running Balance with a single Contact in one
+   * action: marks every unsettled Expense that contributed to that
+   * counterparty's Balance as settled, then returns the freshly-derived
+   * Ledger (in which that counterparty's Balance is now zero).
+   */
+  async settle(userId: string, contactId: string): Promise<LedgerView> {
+    const contact = await this.prisma.contact.findFirst({
+      where: { id: contactId, userId },
+    });
+    if (!contact) {
+      throw new NotFoundException('Contact not found');
+    }
+
+    // Find every unsettled Expense of the User that contributed to this
+    // counterparty's Balance, using the same matching the Ledger derivation
+    // applies (Participant name when User pays; Payer name when User shares in
+    // an external Payer's Expense).
+    const expenses = await this.prisma.expense.findMany({
+      where: { userId, settled: false },
+      include: { participants: true },
+    });
+
+    const contributing: string[] = [];
+    for (const expense of expenses) {
+      if (expense.isUserPayer) {
+        const contributes = expense.participants.some(
+          (p) => !p.isUser && p.name.trim() === contact.name.trim(),
+        );
+        if (contributes) contributing.push(expense.id);
+      } else {
+        const userPart = expense.participants.find((p) => p.isUser);
+        if (
+          userPart &&
+          expense.payerName.trim() === contact.name.trim()
+        ) {
+          contributing.push(expense.id);
+        }
+      }
+    }
+
+    if (contributing.length > 0) {
+      await this.prisma.expense.updateMany({
+        where: { id: { in: contributing } },
+        data: { settled: true },
+      });
+    }
+
+    return this.ledger(userId);
+  }
+
+  private async contactIdByCounterpartyName(
+    userId: string,
+  ): Promise<Map<string, string>> {
+    const contacts = await this.prisma.contact.findMany({
+      where: { userId },
+      select: { id: true, name: true },
+    });
+    return new Map(contacts.map((c) => [c.name, c.id]));
   }
 }

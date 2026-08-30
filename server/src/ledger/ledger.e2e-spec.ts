@@ -132,4 +132,41 @@ describe('Expenses + Ledger (ticket 02, real DB)', () => {
       }),
     ).rejects.toThrow();
   });
+
+  it('settles the whole running Balance with a counterparty and marks every contributing Expense settled', async () => {
+    // Two Expenses with a fresh counterparty so they auto-accumulate into a Contact.
+    await expenses.create(decoded, {
+      amountPaise: 2000,
+      category: 'FoodDrink',
+      splitMethod: 'Equal',
+      participants: [{ name: 'Sel' }],
+    });
+    await expenses.create(decoded, {
+      amountPaise: 8000,
+      category: 'Travel',
+      splitMethod: 'Adhoc',
+      participants: [{ name: 'Sel', sharePaise: 8000 }],
+    });
+
+    const before = await ledger.ledger(TEST_UID);
+    const selEntry = before.entries.find((e) => e.counterparty === 'Sel');
+    expect(selEntry?.balancePaise).toBe(10000);
+    expect(selEntry?.contactId).not.toBeNull();
+
+    const after = await ledger.settle(TEST_UID, selEntry!.contactId!);
+
+    // The whole running Balance with Sel is now zero (entry dropped).
+    expect(after.entries.find((e) => e.counterparty === 'Sel')).toBeUndefined();
+
+    // Every Expense that contributed to Sel's Balance is marked settled.
+    const settledExpenses = await prisma.expense.findMany({
+      where: { userId: TEST_UID, settled: true },
+      include: { participants: true },
+    });
+    const contributingToSel = settledExpenses.filter((x) =>
+      x.participants.some((p) => p.name === 'Sel'),
+    );
+    expect(contributingToSel.length).toBe(2);
+    expect(contributingToSel.reduce((s, x) => s + x.amount, 0)).toBe(10000);
+  });
 });

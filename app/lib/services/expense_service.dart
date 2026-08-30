@@ -143,12 +143,20 @@ class Expense {
 }
 
 class LedgerEntry {
-  const LedgerEntry({required this.counterparty, required this.balancePaise});
+  const LedgerEntry({
+    required this.counterparty,
+    required this.balancePaise,
+    this.contactId,
+  });
 
   final String counterparty;
 
   /// Positive = this counterparty owes the User. Negative = the User owes them.
   final int balancePaise;
+
+  /// The id of the User's Contact for this counterparty, when one exists.
+  /// Non-null means the counterparty can be settled (ticket 07).
+  final String? contactId;
 }
 
 class Ledger {
@@ -168,6 +176,7 @@ class Ledger {
               (e) => LedgerEntry(
                 counterparty: e['counterparty'] as String,
                 balancePaise: e['balancePaise'] as int,
+                contactId: e['contactId'] as String?,
               ),
             )
             .toList(),
@@ -328,6 +337,22 @@ class ExpenseService {
     );
     if (res.statusCode != 200) {
       throw Exception('GET /ledger failed (${res.statusCode})');
+    }
+    return Ledger.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  /// Settles the User's whole running Balance with the Contact of [contactId],
+  /// then returns the freshly-derived Ledger (that counterparty is now zero).
+  Future<Ledger> settleCounterparty(String contactId) async {
+    final token = await _idToken();
+    final res = await http.post(
+      Uri.parse('$_apiBaseUrl/ledger/$contactId/settle'),
+      headers: _headers(token),
+    );
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception(
+        'POST /ledger/$contactId/settle failed (${res.statusCode}): ${res.body}',
+      );
     }
     return Ledger.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
