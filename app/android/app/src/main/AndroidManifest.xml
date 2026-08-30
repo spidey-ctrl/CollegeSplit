@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required to read the device contact list for auto-suggesting a phone
+         number onto a Participant (ticket 06). Requested lazily at runtime. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS"/>
     <application
         android:label="collegesplit"
         android:name="${applicationName}"

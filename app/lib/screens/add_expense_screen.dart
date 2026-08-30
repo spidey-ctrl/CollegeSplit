@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../services/device_contacts.dart';
 import '../services/expense_service.dart';
 
 /// Form to add an Expense — amount, Category, Split Method and Participants.
@@ -8,7 +11,13 @@ import '../services/expense_service.dart';
 /// voice capture (ticket 03), where [draft] prefills the fields the app
 /// understood and [draft.missingFields] marks the ones it couldn't extract.
 class AddExpenseScreen extends StatefulWidget {
-  const AddExpenseScreen({super.key, required this.service, this.onAdded, this.draft});
+  const AddExpenseScreen({
+    super.key,
+    required this.service,
+    this.onAdded,
+    this.draft,
+    this.deviceContacts,
+  });
 
   final ExpenseService service;
 
@@ -17,6 +26,9 @@ class AddExpenseScreen extends StatefulWidget {
 
   /// A voice-capture draft to prefill the form with (optional).
   final VoiceDraft? draft;
+
+  /// Injectable for tests; defaults to the real device contact list.
+  final DeviceContacts? deviceContacts;
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -47,6 +59,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   // blank and get a highlighted border until the User fills them in.
   final Set<String> _highlighted = {};
 
+  late final DeviceContacts _deviceContacts =
+      widget.deviceContacts ?? FlutterDeviceContacts();
+  bool _contactsPermissionGranted = false;
+  // Debounce (per participant row) so typing a name triggers at most one
+  // device-contacts lookup after the User pauses.
+  final Map<_ParticipantRow, Timer> _autoSuggestTimers = {};
+
   @override
   void initState() {
     super.initState();
@@ -75,10 +94,19 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       _participants.add(_ParticipantRow());
       _participants.add(_ParticipantRow());
     }
+
+    // Voice-captured names are known immediately, so look up a device-contacts
+    // phone for each without waiting for typing (ticket 06).
+    for (final row in _participants) {
+      if (row.name.text.trim().isNotEmpty) unawaited(_autoSuggestPhone(row));
+    }
   }
 
   @override
   void dispose() {
+    for (final t in _autoSuggestTimers.values) {
+      t.cancel();
+    }
     _amountController.dispose();
     for (final p in _participants) {
       p.name.dispose();
@@ -203,6 +231,48 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       setState(() => _error = e.toString());
     } finally {
       setState(() => _busy = false);
+    }
+  }
+
+  /// Debounces a device-contacts lookup for [row] so it runs once the User
+  /// pauses, then auto-suggests a phone onto that Participant if their name
+  /// matches an entry in the device contact list.
+  void _scheduleAutoSuggest(_ParticipantRow row) {
+    _autoSuggestTimers[row]?.cancel();
+    final name = row.name.text.trim();
+    if (name.isEmpty) {
+      _autoSuggestTimers.remove(row);
+      return;
+    }
+    _autoSuggestTimers[row] = Timer(const Duration(milliseconds: 250), () {
+      _autoSuggestTimers.remove(row);
+      unawaited(_autoSuggestPhone(row));
+    });
+  }
+
+  /// Requests contact permission (lazily, once) then, if granted, fills [row]'s
+  /// phone with the first device-contact number matching its name. Any failure —
+  /// including a denied permission — is swallowed so manual entry is never
+  /// blocked and a manually-entered number is never overwritten.
+  Future<void> _autoSuggestPhone(_ParticipantRow row) async {
+    if (!mounted) return;
+    if (row.phone.text.trim().isNotEmpty) return;
+    final name = row.name.text.trim();
+    if (name.isEmpty) return;
+    try {
+      if (!_contactsPermissionGranted) {
+        final granted = await _deviceContacts.requestPermission();
+        if (!mounted) return;
+        _contactsPermissionGranted = granted;
+        if (!granted) return; // denial → manual entry stays available
+      }
+      final phone = await _deviceContacts.lookupPhone(name);
+      if (!mounted) return;
+      if (phone != null && row.phone.text.trim().isEmpty) {
+        setState(() => row.phone.text = phone);
+      }
+    } catch (_) {
+      // Permission or lookup failures never block adding an Expense.
     }
   }
 
@@ -393,6 +463,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 child: TextField(
                   controller: row.name,
                   decoration: const InputDecoration(labelText: 'Name'),
+                  onChanged: (_) => _scheduleAutoSuggest(row),
                 ),
               ),
               if (showValue) ...[
