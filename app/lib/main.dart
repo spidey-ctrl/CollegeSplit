@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'services/api_error.dart';
 import 'services/auth_service.dart';
 
 Future<void> main() async {
@@ -36,7 +37,7 @@ class _CollegeSplitAppState extends State<CollegeSplitApp> {
       final user = await _auth.signIn();
       setState(() => _user = user);
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = friendlyError(e));
     } finally {
       setState(() => _busy = false);
     }

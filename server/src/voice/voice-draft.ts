@@ -7,9 +7,11 @@ import {
 /**
  * Builds a ready-to-prefill edit-screen draft from a transcript + extraction.
  *
- * For a Ratio split, when the stated shares don't include the User (e.g. "Alex
- * owes 30%, I'll cover the rest"), the remainder up to 100 is inferred as the
- * signed-in User's own share so the edit screen prefills a complete Ratio.
+ * The signed-in User always takes a share. When the stated shares don't already
+ * include the User, the User is appended as the remainder — the percentage gap
+ * up to 100 for a Ratio split (e.g. "Alex owes 30%, I'll cover the rest"), or a
+ * plain "You" participant for an Equal split — so the edit screen prefills a
+ * complete split that includes the User.
  */
 export function buildDraft(
   transcript: string,
@@ -21,6 +23,11 @@ export function buildDraft(
 
   if (extraction.splitMethod === 'Ratio') {
     inferUserRemainder(participants);
+  } else if (
+    participants.length > 0 &&
+    !participants.some((p) => p.isUser === true)
+  ) {
+    participants.push({ name: 'You', isUser: true });
   }
 
   return {

@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "266111353980-q6v8ce7b2fs0chi690amapnfs99vnv5j.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.collegesplit.collegesplit",
+            "certificate_hash": "3f55556cb2d1ad89e4a8aba47fafd6aa766ed984"
+          }
+        },
+        {
           "client_id": "266111353980-497ahfka834hk01g9dqn4m8ivu291v6e.apps.googleusercontent.com",
           "client_type": 3
         }

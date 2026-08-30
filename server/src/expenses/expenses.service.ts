@@ -10,7 +10,7 @@ import {
   type ExpenseView,
   type ParticipantMatch,
 } from './dto.js';
-import { computeShares, type SplitMethod } from './split.js';
+import { computeShares, withUserShare, type SplitMethod } from './split.js';
 import { ContactsService } from '../contacts/contacts.service.js';
 import { resolveParticipant } from '../contacts/match.js';
 
@@ -33,15 +33,25 @@ export class ExpensesService {
     const participantInputs = body.participants ?? [];
     const isUserPayer = body.isUserPayer ?? true;
 
+    // The User always takes a share of their own Expense, so it is split among
+    // the User AND the others (the User's share is the remainder).
+    const userName = decoded.name ?? decoded.email ?? 'You';
     const shares = computeShares(
       splitMethod as SplitMethod,
       amountPaise,
-      participantInputs.map((p) => ({ ...p })),
+      withUserShare(
+        splitMethod as SplitMethod,
+        amountPaise,
+        participantInputs.map((p) => ({ ...p })),
+        userName,
+      ),
     );
 
     const payerName =
       body.payerName ??
       (isUserPayer ? (decoded.name ?? decoded.email ?? 'You') : shares[0]?.name);
+
+    const requestPhones = this.requestPhoneByParticipant(participantInputs);
 
     const expense = await this.prisma.expense.create({
       data: {
@@ -56,6 +66,7 @@ export class ExpensesService {
             name: s.name,
             sharePaise: s.sharePaise,
             isUser: s.isUser,
+            phoneNumber: requestPhones.get(s.name.trim()) ?? null,
           })),
         },
       },
@@ -106,10 +117,16 @@ export class ExpensesService {
     const participantInputs = body.participants ?? [];
     const isUserPayer = body.isUserPayer ?? existing.isUserPayer;
 
+    const userName = decoded.name ?? decoded.email ?? 'You';
     const shares = computeShares(
       splitMethod as SplitMethod,
       amountPaise,
-      participantInputs.map((p) => ({ ...p })),
+      withUserShare(
+        splitMethod as SplitMethod,
+        amountPaise,
+        participantInputs.map((p) => ({ ...p })),
+        userName,
+      ),
     );
 
     const payerName =
@@ -117,6 +134,8 @@ export class ExpensesService {
       (isUserPayer
         ? (decoded.name ?? decoded.email ?? 'You')
         : shares[0]?.name);
+
+    const requestPhones = this.requestPhoneByParticipant(participantInputs);
 
     // Editing a settled Expense reopens the Balance(s) it belonged to.
     if (existing.settled) {
@@ -141,6 +160,7 @@ export class ExpensesService {
             name: s.name,
             sharePaise: s.sharePaise,
             isUser: s.isUser,
+            phoneNumber: requestPhones.get(s.name.trim()) ?? null,
           })),
         },
       },

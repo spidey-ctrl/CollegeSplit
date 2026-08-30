@@ -72,13 +72,20 @@ model Expense {
 // `sharePaise` is the computed amount this Participant owes the Payer.
 // `isUser` marks when the Participant is the ledger's owning User (used when a
 // non-User Payer fronts money the User shares in).
+//
+// `phoneNumber` is the Participant's optional private phone — the identity
+// anchor the User supplied when adding them, and the pre-target for Share
+// (ticket 10). It is stored on the Participant (not only the Contact) so a
+// single-use Participant's phone is still available to pre-target a native
+// share-sheet hand-off.
 model Participant {
-  id         String  @id @default(cuid())
-  expenseId  String
-  expense    Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  name       String
-  sharePaise Int // in paise; only meaningful when isUser is false
-  isUser     Boolean @default(false)
+  id          String  @id @default(cuid())
+  expenseId   String
+  expense     Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  name        String
+  sharePaise  Int // in paise; only meaningful when isUser is false
+  isUser      Boolean @default(false)
+  phoneNumber String?
 }
 
 // A person a User has split an Expense with more than once, remembered for

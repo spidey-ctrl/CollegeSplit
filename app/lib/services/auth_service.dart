@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
+import 'api_error.dart';
+
 /// The signed-in user's profile as returned by the backend `GET /users/me`.
 class AppUser {
   const AppUser({
@@ -63,7 +65,7 @@ class AuthService {
     final googleAccount = await _googleSignIn.authenticate();
     final idToken = googleAccount.authentication.idToken;
     if (idToken == null) {
-      throw Exception('Google sign-in did not return an ID token');
+      throw const ApiException('Google sign-in did not return a session. Please try again.');
     }
 
     final credential = GoogleAuthProvider.credential(idToken: idToken);
@@ -72,7 +74,7 @@ class AuthService {
     final firebaseUser = _firebaseAuth.currentUser!;
     final firebaseIdToken = await firebaseUser.getIdToken();
     if (firebaseIdToken == null) {
-      throw Exception('Failed to obtain Firebase ID token');
+      throw const ApiException('We could not confirm your sign-in. Please try again.');
     }
 
     return _fetchMe(firebaseIdToken);
@@ -87,7 +89,10 @@ class AuthService {
       },
     );
     if (res.statusCode != 200) {
-      throw Exception('GET /users/me failed with status ${res.statusCode}');
+      throw ApiException(
+        serverErrorMessage(res.statusCode, res.body),
+        statusCode: res.statusCode,
+      );
     }
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     return AppUser.fromJson(body);

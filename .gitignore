@@ -10,6 +10,11 @@ __MACOSX
 # Windows
 Thumbs.db
 
+# Local AI / agent tooling (do not commit skill scaffolding)
+.agents/
+.claude/
+skills-lock.json
+
 # Node (for the future /server)
 node_modules/
 dist/

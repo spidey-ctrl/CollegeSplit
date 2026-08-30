@@ -49,6 +49,61 @@ export function computeShares(
   }
 }
 
+/**
+ * Ensures the signed-in User is a Participant of the split, so the amount is
+ * shared among the User AND the others (the User's own share is the remainder).
+ *
+ * The incoming [participants] are the OTHER people. When none is already marked
+ * `isUser`, the User's share is inferred:
+ *  - Equal: the User is one more equal share.
+ *  - Ratio: the User takes the percentage gap left by the others (to 100).
+ *  - Adhoc: the User takes whatever the others' exact amounts leave unsettled.
+ *
+ * When a Participant is already marked `isUser` (e.g. a voice Ratio where the
+ * User was named, or an external-Payer expense), the list is returned unchanged.
+ * A personal expense (no other Participant) needs no User share.
+ */
+export function withUserShare(
+  method: SplitMethod,
+  amount: number,
+  participants: SplitParticipantInput[],
+  userName: string,
+): SplitParticipantInput[] {
+  if (participants.some((p) => p.isUser === true)) return participants;
+  if (participants.length === 0) return participants;
+
+  switch (method) {
+    case 'Equal':
+      return [...participants, { name: userName, isUser: true }];
+    case 'Ratio': {
+      const ratios = participants.map((p) => p.ratio as number);
+      if (ratios.some((r) => !Number.isInteger(r) || r <= 0)) return participants;
+      const used = ratios.reduce((sum, r) => sum + r, 0);
+      const remainder = 100 - used;
+      if (remainder <= 0) {
+        throw new BadRequestException(
+          'The share percentages must leave room for your own share.',
+        );
+      }
+      return [...participants, { name: userName, ratio: remainder, isUser: true }];
+    }
+    case 'Adhoc': {
+      const shares = participants.map((p) => p.sharePaise as number);
+      if (shares.some((s) => !Number.isInteger(s) || s <= 0)) return participants;
+      const used = shares.reduce((sum, s) => sum + s, 0);
+      const remainder = amount - used;
+      if (remainder <= 0) {
+        throw new BadRequestException(
+          'The amounts you entered must leave room for your own share.',
+        );
+      }
+      return [...participants, { name: userName, sharePaise: remainder, isUser: true }];
+    }
+    default:
+      return participants;
+  }
+}
+
 function splitEqual(
   amount: number,
   inputs: SplitParticipantInput[],
@@ -70,12 +125,12 @@ function splitRatio(
   const ratios: number[] = inputs.map((p) => p.ratio as number);
   if (ratios.some((r) => !Number.isInteger(r) || r <= 0)) {
     throw new BadRequestException(
-      'Ratio split requires a positive integer ratio for every Participant',
+      'Give every Participant a positive whole-number ratio.',
     );
   }
   const total = ratios.reduce((sum, r) => sum + r, 0);
   if (total <= 0) {
-    throw new BadRequestException('Ratio weights must sum to more than zero');
+    throw new BadRequestException('The ratio weights must add up to more than zero.');
   }
 
   const exact = ratios.map((r) => (amount * r) / total);
@@ -109,13 +164,13 @@ function splitAdhoc(
   const shares: number[] = inputs.map((p) => p.sharePaise as number);
   if (shares.some((s) => !Number.isInteger(s) || s <= 0)) {
     throw new BadRequestException(
-      'Adhoc split requires a positive integer sharePaise for every Participant',
+      'Give every Participant an exact amount greater than zero.',
     );
   }
   const total = shares.reduce((sum, s) => sum + s, 0);
   if (total !== amount) {
     throw new BadRequestException(
-      `Adhoc shares (${total}) must sum exactly to the expense amount (${amount})`,
+      `The amounts you entered (₹${paiseToRupees(total)}) must add up to the expense total (₹${paiseToRupees(amount)}).`,
     );
   }
   return inputs.map((p, i) => ({
@@ -123,4 +178,11 @@ function splitAdhoc(
     sharePaise: shares[i],
     isUser: p.isUser ?? false,
   }));
+}
+
+/** Formats a paise amount as an INR string, e.g. 4000 -> "40.00". */
+function paiseToRupees(paise: number): string {
+  const rupees = Math.trunc(paise / 100);
+  const fraction = (paise % 100).toString().padStart(2, '0');
+  return `${rupees}.${fraction}`;
 }

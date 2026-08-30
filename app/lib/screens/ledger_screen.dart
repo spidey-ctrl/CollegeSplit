@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/api_error.dart';
 import '../services/expense_service.dart';
 
 /// The User's private Ledger: who owes whom, as an aggregate Balance per
@@ -35,7 +36,7 @@ class LedgerScreenState extends State<LedgerScreen> {
       final ledger = await widget.service.fetchLedger();
       setState(() => _ledger = ledger);
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = friendlyError(e));
     } finally {
       setState(() => _loading = false);
     }
@@ -157,7 +158,7 @@ class LedgerScreenState extends State<LedgerScreen> {
         _error = null;
       });
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = friendlyError(e));
     }
   }
 }

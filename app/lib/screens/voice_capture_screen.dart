@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 
+import '../services/api_error.dart';
 import '../services/expense_service.dart';
 import 'add_expense_screen.dart';
 
@@ -105,7 +106,7 @@ class _VoiceCaptureScreenState extends State<VoiceCaptureScreen> {
       } catch (e) {
         setState(() {
           _recording = false;
-          _error = 'Could not start recording: $e';
+          _error = 'Could not start recording. Your microphone may be in use.';
         });
       }
       return;
@@ -140,7 +141,7 @@ class _VoiceCaptureScreenState extends State<VoiceCaptureScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _error = 'Could not understand the audio: $e');
+      setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

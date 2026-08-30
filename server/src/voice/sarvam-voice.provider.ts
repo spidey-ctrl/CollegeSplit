@@ -75,7 +75,7 @@ export class SarvamVoiceProvider implements VoiceProvider {
     let res: Response;
     try {
       res = await fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',
         {
           method: 'POST',
           headers: {
@@ -144,13 +144,14 @@ export class SarvamVoiceProvider implements VoiceProvider {
     return {
       type: 'object',
       properties: {
-        amountPaise: { type: 'integer', description: 'Total amount in paise, or null if unstated.' },
+        amountPaise: { type: 'integer', nullable: true, description: 'Total amount in paise, or null if unstated.' },
         category: {
-          type: ['string', 'null'],
-          enum: this.categorySchemaEnum(),
+          type: 'string',
+          enum: [...CATEGORIES],
+          nullable: true,
           description: 'One of the fixed categories, or null if unsure.',
         },
-        payerName: { type: ['string', 'null'], description: 'External payer name, or null.' },
+        payerName: { type: 'string', nullable: true, description: 'External payer name, or null.' },
         isUserPayer: { type: 'boolean', description: 'True if the owner is the payer.' },
         splitMethod: { type: 'string', enum: ['Equal', 'Ratio'], description: 'How the expense is split.' },
         participants: {
@@ -174,12 +175,6 @@ export class SarvamVoiceProvider implements VoiceProvider {
       },
       required: ['amountPaise', 'category', 'payerName', 'isUserPayer', 'splitMethod', 'participants', 'missingFields'],
     };
-  }
-
-  /** Gemini enum cannot contain 'null' alongside string values in all versions,
-   *  so we provide the category enum plus a separate nullable handling. */
-  private categorySchemaEnum(): Array<string | null> {
-    return [...CATEGORIES, null];
   }
 
   private normalize(raw: Record<string, unknown>): RawExtraction {

@@ -86,6 +86,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       _amountController.text = _paiseToRupees(existing.amountPaise);
       _category = existing.category;
       for (final p in existing.participants) {
+        if (p.isUser) continue; // The signed-in User is the locked 'You' row.
         final row = _ParticipantRow();
         row.name.text = p.name;
         row.isUser = p.isUser;
@@ -108,6 +109,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       // One row per understood participant (name + ratio for a Ratio split)
       // plus a trailing empty one for adding more.
       for (final p in draft.participants) {
+        if (p.isUser) continue; // The signed-in User is the locked 'You' row.
         final row = _ParticipantRow();
         row.name.text = p.name;
         row.isUser = p.isUser;
@@ -160,6 +162,59 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     final rupees = paise ~/ 100;
     final fraction = (paise % 100).toString().padLeft(2, '0');
     return '$rupees.$fraction';
+  }
+
+  /// A short label for the locked 'You' row, describing the User's own share.
+  String _userShareDescription() {
+    switch (_splitMethod) {
+      case SplitMethod.equal:
+        return 'Splits evenly with everyone';
+      case SplitMethod.ratio:
+        final used = _participants.fold<int>(
+          0,
+          (acc, row) => row.name.text.trim().isEmpty
+              ? acc
+              : acc + (int.tryParse(row.value.text.trim()) ?? 0),
+        );
+        final remainder = 100 - used;
+        return remainder > 0
+            ? 'Your share: $remainder%'
+            : 'Your share isn’t accounted for';
+      case SplitMethod.adhoc:
+        final amountPaise = _rupeesToPaise(_amountController.text);
+        if (amountPaise == null) return 'Your share: the rest';
+        final used = _participants.fold<int>(
+          0,
+          (acc, row) => row.name.text.trim().isEmpty
+              ? acc
+              : acc + (_rupeesToPaise(row.value.text.trim()) ?? 0),
+        );
+        final remainder = amountPaise - used;
+        return remainder > 0
+            ? 'Your share: ₹${_paiseToRupees(remainder)}'
+            : 'Your share isn’t accounted for';
+    }
+  }
+
+  /// The locked 'You' participant shown first, so the User is always a sharer.
+  Widget _youShareRow(ColorScheme colorScheme) {
+    final isUserPayer = widget.existingExpense?.isUserPayer ?? true;
+    final role = isUserPayer ? 'You paid' : 'You shared';
+    return Card(
+      elevation: 0,
+      color: colorScheme.surfaceContainerHighest,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        dense: true,
+        leading: CircleAvatar(
+          radius: 16,
+          child: const Icon(Icons.person, size: 18),
+        ),
+        title: Text('$role — You'),
+        subtitle: Text(_userShareDescription()),
+        trailing: const Icon(Icons.lock_outline, size: 18),
+      ),
+    );
   }
 
   Future<void> _submit() async {
@@ -338,6 +393,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           TextField(
             controller: _amountController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
             decoration: _fieldDecoration(
               labelText: 'Amount (₹)',
               prefixText: '₹ ',
@@ -388,6 +444,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           const SizedBox(height: 16),
           Text('Participants', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
+          _youShareRow(colorScheme),
           for (var i = 0; i < _participants.length; i++)
             _participantField(i),
           Align(
@@ -529,6 +586,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
+                    onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(labelText: valueLabel),
                   ),
                 ),

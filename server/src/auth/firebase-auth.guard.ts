@@ -17,8 +17,12 @@ export class FirebaseAuthGuard implements CanActivate {
           credential: cert(JSON.parse(account)),
         });
       } else {
-        // Application Default Credentials (e.g. Cloud Run / local gcloud ADC)
-        initializeApp();
+        // ID-token verification only needs the project ID (public signing keys
+        // are fetched from Google). Cloud Run / gcloud ADC can still supply the
+        // project ID implicitly; we pass it explicitly so local dev works too.
+        initializeApp({
+          projectId: process.env.FIREBASE_PROJECT_ID ?? 'collegesplit',
+        });
       }
     }
   }
