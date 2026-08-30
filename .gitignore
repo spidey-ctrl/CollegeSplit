@@ -15,6 +15,12 @@ node_modules/
 dist/
 *.log
 
+# Secrets / local environment (never commit)
+.env
+server/.env
+server/.env.local
+*.env.local
+
 # Flutter (for the future /app)
 .dart_tool/
 build/
