@@ -1,0 +1,3 @@
+# Ledger-only: the system never moves money
+
+CollegeSplit tracks who owes whom (the Ledger) but does not integrate with any payment rail to actually transfer funds — settlement happens outside the app (cash, a separate payment app, etc.). We considered integrating a payment provider so debts could be settled in-app, but rejected it: handling real money brings compliance, custody, and failure-mode obligations far beyond the core goal of fast, low-friction expense capture and splitting. This is a deliberate scope boundary, not an oversight — a future reader should not assume payment integration is "missing" functionality to add casually, since it changes the system's risk profile substantially.

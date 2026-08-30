@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+__MACOSX
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Windows
+Thumbs.db
+
+# Node (for the future /server)
+node_modules/
+dist/
+*.log
+
+# Flutter (for the future /app)
+.dart_tool/
+build/
+*.iml
