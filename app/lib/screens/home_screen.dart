@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import '../services/expense_service.dart';
+import 'add_expense_screen.dart';
+import 'ledger_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.user, required this.onSignOut});
@@ -14,6 +17,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
+  final ExpenseService _expenseService = ExpenseService();
+  final GlobalKey<LedgerScreenState> _ledgerKey =
+      GlobalKey<LedgerScreenState>();
+
+  void _refreshLedger() {
+    _ledgerKey.currentState?.refresh();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,10 +73,13 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: IndexedStack(
               index: _index,
-              children: const [
-                _PlaceholderTab(label: 'Carry Debt'),
-                _PlaceholderTab(label: 'New Expense'),
-                _PlaceholderTab(label: 'Your Balance'),
+              children: [
+                const _PlaceholderTab(label: 'Carry Debt'),
+                AddExpenseScreen(
+                  service: _expenseService,
+                  onAdded: _refreshLedger,
+                ),
+                LedgerScreen(key: _ledgerKey, service: _expenseService),
               ],
             ),
           ),

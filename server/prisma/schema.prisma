@@ -12,6 +12,22 @@ datasource db {
 
 // A person who has installed CollegeSplit and signed in via Google.
 // The User's id is their Firebase UID.
+enum SplitMethod {
+  Equal
+  Ratio
+  Adhoc
+}
+
+enum Category {
+  FoodDrink
+  Transport
+  Groceries
+  RentUtilities
+  Travel
+  Entertainment
+  Other
+}
+
 model User {
   id          String   @id
   displayName String
@@ -20,4 +36,42 @@ model User {
   // Used only as an exact-matching key for Share (see CONTEXT.md).
   phoneNumber String?
   createdAt   DateTime @default(now())
+  expenses    Expense[]
+}
+
+// A single spend event entered by a User (the ledger owner), with an amount
+// (in INR, stored as integer paise), a Category, a Payer, and zero or more
+// Participants who share its cost. The Expense belongs to the private Ledger
+// of the owning User; Ledgers are never shared or synced between Users.
+//
+// Balance is never stored — it is always recomputed from the Participants'
+// per-expense shares (see the LedgerService).
+model Expense {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Int // total spend in paise (1 INR = 100 paise)
+  category    Category
+  // Who fronted the money. Defaults to the owning User, but may be any person.
+  payerName   String
+  // Whether the Payer is the owning User (drives the direction of Balances).
+  isUserPayer Boolean       @default(true)
+  splitMethod SplitMethod
+  createdAt   DateTime      @default(now())
+  participants Participant[]
+}
+
+// A person named on a single Expense as sharing its cost. In ticket 02
+// Participants are free-text names only (no Contact matching yet — ticket 05),
+// so `name` is the identity key used for per-counterparty Balance aggregation.
+// `sharePaise` is the computed amount this Participant owes the Payer.
+// `isUser` marks when the Participant is the ledger's owning User (used when a
+// non-User Payer fronts money the User shares in).
+model Participant {
+  id         String  @id @default(cuid())
+  expenseId  String
+  expense    Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  name       String
+  sharePaise Int // in paise; only meaningful when isUser is false
+  isUser     Boolean @default(false)
 }
