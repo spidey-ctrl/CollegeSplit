@@ -1,0 +1,112 @@
+import 'package:flutter/material.dart';
+
+import '../services/auth_service.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key, required this.user, required this.onSignOut});
+
+  final AppUser user;
+  final Future<void> Function() onSignOut;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _index = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('CollegeSplit'),
+        actions: [
+          IconButton(
+            tooltip: 'Sign out',
+            onPressed: () async {
+              await widget.onSignOut();
+            },
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Material(
+            color: colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  CircleAvatar(child: Text(widget.user.displayName.characters.first)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.user.displayName,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Text(
+                          widget.user.email,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: IndexedStack(
+              index: _index,
+              children: const [
+                _PlaceholderTab(label: 'Carry Debt'),
+                _PlaceholderTab(label: 'New Expense'),
+                _PlaceholderTab(label: 'Your Balance'),
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (i) => setState(() => _index = i),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.paid_outlined), label: 'Debt'),
+          NavigationDestination(
+            icon: Icon(Icons.add_circle_outline),
+            label: 'Expense',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            label: 'Balance',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlaceholderTab extends StatelessWidget {
+  const _PlaceholderTab({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.construction, size: 48),
+          const SizedBox(height: 12),
+          Text(label, style: Theme.of(context).textTheme.titleLarge),
+        ],
+      ),
+    );
+  }
+}

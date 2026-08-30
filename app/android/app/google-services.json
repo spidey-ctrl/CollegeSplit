@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "266111353980",
+    "project_id": "collegesplit",
+    "storage_bucket": "collegesplit.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:266111353980:android:156ea812502a9ac6e3b5f9",
+        "android_client_info": {
+          "package_name": "com.collegesplit.collegesplit"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "266111353980-497ahfka834hk01g9dqn4m8ivu291v6e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjzlLXxnQzXVw9A3_lU72A0N4Dj0R3H1k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "266111353980-497ahfka834hk01g9dqn4m8ivu291v6e.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,11 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/src/generated/prisma
+
+# Prisma 7 `prisma init` agent-skill scaffolding (not project code)
+.claude/
+.windsurf/
+.agents/
+skills-lock.json

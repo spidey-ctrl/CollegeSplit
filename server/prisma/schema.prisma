@@ -1,0 +1,23 @@
+// CollegeSplit Prisma schema
+// See CONTEXT.md for the canonical domain vocabulary.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// A person who has installed CollegeSplit and signed in via Google.
+// The User's id is their Firebase UID.
+model User {
+  id          String   @id
+  displayName String
+  email       String   @unique
+  // Optional, private to the User. Never displayed to other Users.
+  // Used only as an exact-matching key for Share (see CONTEXT.md).
+  phoneNumber String?
+  createdAt   DateTime @default(now())
+}
