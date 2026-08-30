@@ -15,6 +15,37 @@ abstract class ShareLauncher {
   Future<void> launch(SharePayload payload);
 }
 
+/// How a Share payload should be handed off to the device.
+enum ShareInvocationKind { openDeepLink, openShareSheet }
+
+class ShareInvocation {
+  const ShareInvocation(this.kind, {this.deepLinkUrl, this.text});
+
+  final ShareInvocationKind kind;
+
+  /// Non-null when [kind] is [ShareInvocationKind.openDeepLink].
+  final String? deepLinkUrl;
+
+  /// The summary text, for the generic sheet (and the deep-link fallback).
+  final String? text;
+}
+
+/// Decides the native invocation from a Share payload — pre-targeted deep link
+/// when a phone is on file, otherwise a generic sheet. Pure and unit-testable,
+/// so the "correct share-sheet invocation in each case" (the ticket-10 Seam) is
+/// asserted without touching the platform plugins.
+ShareInvocation resolveShareInvocation(SharePayload payload) {
+  final target = payload.target;
+  if (target.kind == ShareTargetKind.phone && target.deepLinkUrl != null) {
+    return ShareInvocation(
+      ShareInvocationKind.openDeepLink,
+      deepLinkUrl: target.deepLinkUrl,
+      text: payload.text,
+    );
+  }
+  return ShareInvocation(ShareInvocationKind.openShareSheet, text: payload.text);
+}
+
 /// Real implementation backed by `share_plus` (generic sheet) and `url_launcher`
 /// (pre-targeted deep link). Not exercised in widget tests, which inject a fake.
 class NativeShareLauncher implements ShareLauncher {
@@ -22,15 +53,15 @@ class NativeShareLauncher implements ShareLauncher {
 
   @override
   Future<void> launch(SharePayload payload) async {
-    final target = payload.target;
-    if (target.kind == ShareTargetKind.phone && target.deepLinkUrl != null) {
+    final invocation = resolveShareInvocation(payload);
+    if (invocation.kind == ShareInvocationKind.openDeepLink) {
       final opened = await launchUrl(
-        Uri.parse(target.deepLinkUrl!),
+        Uri.parse(invocation.deepLinkUrl!),
         mode: LaunchMode.externalApplication,
       );
       if (opened) return;
       // The pre-targeting app isn't installed — fall back to a generic sheet.
     }
-    await SharePlus.instance.share(ShareParams(text: payload.text));
+    await SharePlus.instance.share(ShareParams(text: invocation.text ?? payload.text));
   }
 }

@@ -54,6 +54,13 @@ Expense _expense() => Expense(
 void main() {
   testWidgets('Add Expense form submits amount, category and participants',
       (tester) async {
+    // A tall viewport so the submit button (below the participants fold) is
+    // tappable, matching the other form tests in this suite.
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final service = _FakeExpenseService(expense: _expense());
     await tester.pumpWidget(
       MaterialApp(home: Scaffold(body: AddExpenseScreen(service: service))),

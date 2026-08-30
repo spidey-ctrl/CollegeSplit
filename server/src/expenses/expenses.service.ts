@@ -263,12 +263,7 @@ export class ExpensesService {
     participantInputs: Array<{ name: string; phoneNumber?: string }>,
   ): Promise<ExpenseView> {
     // Per-name phone captured from the request (the identity anchor for matching).
-    const requestPhones = new Map<string, string>();
-    for (const p of participantInputs) {
-      const nm = p.name?.trim();
-      const ph = p.phoneNumber?.trim();
-      if (nm && ph) requestPhones.set(nm, ph);
-    }
+    const requestPhones = this.requestPhoneByParticipant(participantInputs);
 
     // Auto-create Contacts once a name is used on 2+ Expenses.
     const uniqueNamed = expense.participants

@@ -230,11 +230,13 @@ void main() {
 
     await _driveRecording(tester, recorder);
 
-    // Ratio is active and both the stated and inferred shares are prefilled.
+    // Ratio is active; the stated Alex share is editable, and the inferred
+    // remainder is shown on the locked 'You' row (the User is the payer, not an
+    // editable participant).
     expect(find.widgetWithText(TextField, 'Alex'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'You'), findsOneWidget);
+    expect(find.textContaining('You paid — You'), findsOneWidget);
     expect(find.widgetWithText(TextField, '30'), findsOneWidget); // stated
-    expect(find.widgetWithText(TextField, '70'), findsOneWidget); // inferred remainder
+    expect(find.textContaining('Your share: 70%'), findsOneWidget); // remainder
 
     // Editable: adjust Alex's share and confirm — the edited ratio is submitted.
     await tester.enterText(
@@ -244,12 +246,10 @@ void main() {
     await _tapAddExpense(tester);
 
     expect(service.capturedAmountPaise, 5000);
-    final alex = service.capturedParticipants
-        .firstWhere((p) => p.name == 'Alex');
+    // Only the other participants are submitted; the User is the payer.
+    expect(service.capturedParticipants.map((p) => p.name), ['Alex']);
+    final alex = service.capturedParticipants.single;
     expect(alex.ratio, 40);
     expect(alex.isUser, isFalse);
-    final me = service.capturedParticipants
-        .firstWhere((p) => p.isUser || p.name == 'You');
-    expect(me.ratio, 70);
   });
 }

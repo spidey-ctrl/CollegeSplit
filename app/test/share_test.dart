@@ -159,4 +159,19 @@ void main() {
     expect(launcher.launched, hasLength(1));
     expect(launcher.launched.single.target.kind, ShareTargetKind.phone);
   });
+
+  test('a phone on file resolves to a pre-targeted deep link invocation', () {
+    final invocation = resolveShareInvocation(_phonePayload());
+    expect(invocation.kind, ShareInvocationKind.openDeepLink);
+    expect(invocation.deepLinkUrl, 'https://wa.me/919999999999?text=hi');
+  });
+
+  test('no phone resolves to a generic share-sheet invocation', () {
+    final invocation = resolveShareInvocation(SharePayload(
+      text: 'Dana owes you ₹60.00',
+      target: ShareTarget.none(),
+    ));
+    expect(invocation.kind, ShareInvocationKind.openShareSheet);
+    expect(invocation.text, 'Dana owes you ₹60.00');
+  });
 }

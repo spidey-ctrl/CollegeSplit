@@ -16,7 +16,12 @@ export interface ShareExpenseSource {
 
 const CATEGORY_LABELS: Record<string, string> = {
   FoodDrink: 'Food & Drink',
+  Transport: 'Transport',
+  Groceries: 'Groceries',
   RentUtilities: 'Rent & Utilities',
+  Travel: 'Travel',
+  Entertainment: 'Entertainment',
+  Other: 'Other',
 };
 
 /** Formats paise as an INR string, e.g. 4000 -> "₹40.00". */
@@ -62,8 +67,10 @@ export function balanceShareText(counterparty: string, balancePaise: number): st
 
 /**
  * Builds a deep link that pre-targets the device's native share sheet at a
- * recipient's phone number (a WhatsApp chat with the summary prefilled). Returns
- * null when no phone is on file, so the caller falls back to a generic sheet.
+ * recipient's phone number (a WhatsApp chat with the summary prefilled).
+ *
+ * A phone number is required here; callers that discover no phone on file should
+ * choose the generic (no-target) payload instead and never call this.
  */
 export function phoneDeepLink(phoneNumber: string, text: string): string {
   const digits = phoneNumber.replace(/\D/g, '');

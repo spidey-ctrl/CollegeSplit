@@ -48,13 +48,10 @@ export class ShareService {
     // split-with-one-person case) and that person has a phone on file.
     const counterparties = expense.participants.filter((p) => !p.isUser);
     const sole = counterparties.length === 1 ? counterparties[0] : undefined;
-    const phone = sole?.phoneNumber?.trim();
-    return {
-      text,
-      target: phone
-        ? { kind: 'phone', phoneNumber: phone, deepLinkUrl: phoneDeepLink(phone, text) }
-        : { kind: 'none' },
-    };
+    const phone = sole
+      ? (await this.counterpartyPhone(decoded.uid, sole.name)) ?? sole.phoneNumber ?? null
+      : null;
+    return { text, target: this.targetFor(phone, text) };
   }
 
   async shareBalance(
@@ -70,12 +67,15 @@ export class ShareService {
 
     const text = balanceShareText(counterparty, entry.balancePaise);
     const phone = await this.counterpartyPhone(decoded.uid, counterparty);
-    return {
-      text,
-      target: phone
-        ? { kind: 'phone', phoneNumber: phone, deepLinkUrl: phoneDeepLink(phone, text) }
-        : { kind: 'none' },
-    };
+    return { text, target: this.targetFor(phone, text) };
+  }
+
+  /** Pre-targeted payload when a phone is on file; generic (no recipient)
+   *  otherwise. */
+  private targetFor(phone: string | null, text: string): SharePayload['target'] {
+    return phone
+      ? { kind: 'phone', phoneNumber: phone, deepLinkUrl: phoneDeepLink(phone, text) }
+      : { kind: 'none' };
   }
 
   /**
