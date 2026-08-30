@@ -312,6 +312,23 @@ export class ExpensesService {
     return this.toView(expense, matches);
   }
 
+  /**
+   * Maps each Participant name (trimmed) to the phone the User supplied in the
+   * request, so a phone is persisted onto the Participant row (the identity
+   * anchor Share uses to pre-target a native share-sheet hand-off).
+   */
+  private requestPhoneByParticipant(
+    participantInputs: Array<{ name: string; phoneNumber?: string }>,
+  ): Map<string, string> {
+    const phones = new Map<string, string>();
+    for (const p of participantInputs) {
+      const nm = p.name?.trim();
+      const ph = p.phoneNumber?.trim();
+      if (nm && ph) phones.set(nm, ph);
+    }
+    return phones;
+  }
+
   private async provisionUser(decoded: DecodedIdToken) {
     const email = decoded.email ?? `${decoded.uid}@users.noreply.collegesplit`;
     await this.prisma.user.upsert({

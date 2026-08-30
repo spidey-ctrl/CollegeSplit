@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/expense_service.dart';
 import 'add_expense_screen.dart';
-import 'expense_history_screen.dart';
+import 'debt_screen.dart';
 import 'ledger_screen.dart';
 import 'voice_capture_screen.dart';
 
@@ -20,6 +20,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
   final ExpenseService _expenseService = ExpenseService();
+  final GlobalKey<DebtScreenState> _debtKey = GlobalKey<DebtScreenState>();
   final GlobalKey<LedgerScreenState> _ledgerKey =
       GlobalKey<LedgerScreenState>();
 
@@ -27,12 +28,19 @@ class _HomeScreenState extends State<HomeScreen> {
     _ledgerKey.currentState?.refresh();
   }
 
+  void _refreshDebt() {
+    _debtKey.currentState?.refresh();
+  }
+
   void _openVoiceCapture() {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => VoiceCaptureScreen(
           service: _expenseService,
-          onConfirm: _refreshLedger,
+          onConfirm: () {
+            _refreshDebt();
+            _refreshLedger();
+          },
         ),
       ),
     );
@@ -92,13 +100,13 @@ class _HomeScreenState extends State<HomeScreen> {
             child: IndexedStack(
               index: _index,
               children: [
-                ExpenseHistoryScreen(
-                  service: _expenseService,
-                  onChanged: _refreshLedger,
-                ),
+                DebtScreen(key: _debtKey, service: _expenseService),
                 AddExpenseScreen(
                   service: _expenseService,
-                  onAdded: _refreshLedger,
+                  onAdded: () {
+                    _refreshDebt();
+                    _refreshLedger();
+                  },
                 ),
                 LedgerScreen(key: _ledgerKey, service: _expenseService),
               ],
@@ -110,7 +118,10 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.history), label: 'History'),
+          NavigationDestination(
+            icon: Icon(Icons.paid_outlined),
+            label: 'Debt',
+          ),
           NavigationDestination(
             icon: Icon(Icons.add_circle_outline),
             label: 'Expense',

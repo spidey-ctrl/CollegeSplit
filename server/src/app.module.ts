@@ -7,6 +7,7 @@ import { ExpensesModule } from './expenses/expenses.module.js';
 import { LedgerModule } from './ledger/ledger.module.js';
 import { VoiceModule } from './voice/voice.module.js';
 import { ContactsModule } from './contacts/contacts.module.js';
+import { ShareModule } from './share/share.module.js';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ContactsModule } from './contacts/contacts.module.js';
     LedgerModule,
     VoiceModule,
     ContactsModule,
+    ShareModule,
   ],
   controllers: [AppController],
   providers: [AppService],
