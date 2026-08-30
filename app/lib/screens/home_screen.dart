@@ -17,12 +17,34 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _index = 0;
   final ExpenseService _expenseService = ExpenseService();
   final GlobalKey<DebtScreenState> _debtKey = GlobalKey<DebtScreenState>();
   final GlobalKey<LedgerScreenState> _ledgerKey =
       GlobalKey<LedgerScreenState>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Refresh on resume so external Ledger changes (e.g. a DB reset) are
+    // reflected instead of showing a stale pre-reset balance.
+    if (state == AppLifecycleState.resumed) {
+      _refreshDebt();
+      _refreshLedger();
+    }
+  }
 
   void _refreshLedger() {
     _ledgerKey.currentState?.refresh();
