@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../services/api_error.dart';
 import '../services/expense_service.dart';
+import '../services/share_launcher.dart';
 import 'add_expense_screen.dart';
 
 /// A history/list view of a User's past Expenses (ticket 08). Each Expense —
@@ -10,10 +12,14 @@ class ExpenseHistoryScreen extends StatefulWidget {
   const ExpenseHistoryScreen({
     super.key,
     required this.service,
+    this.shareLauncher = const NativeShareLauncher(),
     this.onChanged,
   });
 
   final ExpenseService service;
+
+  /// Hand-off for the native share sheet when the User shares an Expense.
+  final ShareLauncher shareLauncher;
 
   /// Called after an edit/delete so a dependent view (e.g. the Ledger) can
   /// refresh, since reopening a settled Balance changes it.
@@ -137,6 +143,11 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                 ),
               ),
             IconButton(
+              tooltip: 'Share ${expense.category.label} expense',
+              icon: const Icon(Icons.share_outlined),
+              onPressed: () => _share(expense),
+            ),
+            IconButton(
               tooltip: 'Edit ${expense.category.label} expense',
               icon: const Icon(Icons.edit_outlined),
               onPressed: () => _edit(expense),
@@ -151,6 +162,18 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
         onTap: () => _edit(expense),
       ),
     );
+  }
+
+  /// Fetches the Share payload for this Expense and hands it to the native
+  /// share sheet (ticket 10). Pre-targets the Participant's phone when on file,
+  /// or opens a generic sheet with no pre-selected recipient otherwise.
+  Future<void> _share(Expense expense) async {
+    try {
+      final payload = await widget.service.shareExpense(expense.id);
+      await widget.shareLauncher.launch(payload);
+    } catch (e) {
+      if (mounted) setState(() => _error = friendlyError(e));
+    }
   }
 
   Future<void> _edit(Expense expense) async {

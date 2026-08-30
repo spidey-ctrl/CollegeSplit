@@ -7,11 +7,12 @@ import {
 /**
  * Builds a ready-to-prefill edit-screen draft from a transcript + extraction.
  *
- * The signed-in User always takes a share. When the stated shares don't already
- * include the User, the User is appended as the remainder — the percentage gap
- * up to 100 for a Ratio split (e.g. "Alex owes 30%, I'll cover the rest"), or a
- * plain "You" participant for an Equal split — so the edit screen prefills a
- * complete split that includes the User.
+ * The User is the Payer of their own Expense and is not a Participant of it (see
+ * the Ledger model in CONTEXT.md), so the participants are the *others* who
+ * share the cost. The one exception is a Ratio split where the speaker names a
+ * share for themselves but leaves the rest unstated ("Alex owes 30%, I'll cover
+ * the rest") — there the remaining percentage is inferred as the User's own
+ * share so the edit screen prefills a complete split.
  */
 export function buildDraft(
   transcript: string,
@@ -23,11 +24,6 @@ export function buildDraft(
 
   if (extraction.splitMethod === 'Ratio') {
     inferUserRemainder(participants);
-  } else if (
-    participants.length > 0 &&
-    !participants.some((p) => p.isUser === true)
-  ) {
-    participants.push({ name: 'You', isUser: true });
   }
 
   return {

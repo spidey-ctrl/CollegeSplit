@@ -273,6 +273,52 @@ class VoiceDraft {
       );
 }
 
+/// What the backend hands back for a Share (ticket 10). Carries a read-only
+/// text summary plus, when a phone is on file, a deep-link pre-target that
+/// directs the native share sheet at that number.
+enum ShareTargetKind { phone, none }
+
+class ShareTarget {
+  const ShareTarget({required this.kind, this.phoneNumber, this.deepLinkUrl});
+
+  final ShareTargetKind kind;
+
+  /// Non-null when [kind] is [ShareTargetKind.phone].
+  final String? phoneNumber;
+
+  /// Non-null when [kind] is [ShareTargetKind.phone] — e.g. a WhatsApp URL.
+  final String? deepLinkUrl;
+
+  static ShareTarget none() =>
+      const ShareTarget(kind: ShareTargetKind.none);
+
+  factory ShareTarget.fromJson(Map<String, dynamic> json) {
+    final kind = json['kind'] as String;
+    if (kind == 'phone') {
+      return ShareTarget(
+        kind: ShareTargetKind.phone,
+        phoneNumber: json['phoneNumber'] as String,
+        deepLinkUrl: json['deepLinkUrl'] as String,
+      );
+    }
+    return ShareTarget.none();
+  }
+}
+
+class SharePayload {
+  const SharePayload({required this.text, required this.target});
+
+  /// Read-only summary of the shared Expense/Balance. Sharing is informational
+  /// only — it never grants edit access or merges Ledgers.
+  final String text;
+  final ShareTarget target;
+
+  factory SharePayload.fromJson(Map<String, dynamic> json) => SharePayload(
+        text: json['text'] as String,
+        target: ShareTarget.fromJson(json['target'] as Map<String, dynamic>),
+      );
+}
+
 /// Calls the backend to create/read/edit/delete Expenses and read the User's
 /// private Ledger.
 class ExpenseService {
@@ -450,6 +496,41 @@ class ExpenseService {
       );
     }
     return Ledger.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  /// Produces the native-fallback Share payload for one Expense (ticket 10).
+  /// The payload carries a read-only text summary and, when the Participant has
+  /// a phone on file, a pre-targeting deep link for the native share sheet.
+  Future<SharePayload> shareExpense(String expenseId) async {
+    final token = await _idToken();
+    final res = await http.post(
+      Uri.parse('$_apiBaseUrl/share/expense'),
+      headers: _headers(token),
+      body: jsonEncode({'expenseId': expenseId}),
+    );
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception(
+        'POST /share/expense failed (${res.statusCode}): ${res.body}',
+      );
+    }
+    return SharePayload.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  /// Produces the native-fallback Share payload for the User's aggregate Balance
+  /// with a single counterparty (ticket 10).
+  Future<SharePayload> shareBalance(String counterparty) async {
+    final token = await _idToken();
+    final res = await http.post(
+      Uri.parse('$_apiBaseUrl/share/balance'),
+      headers: _headers(token),
+      body: jsonEncode({'counterparty': counterparty}),
+    );
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception(
+        'POST /share/balance failed (${res.statusCode}): ${res.body}',
+      );
+    }
+    return SharePayload.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
   /// Fetches the signed-in User's accumulated Contacts.

@@ -95,7 +95,7 @@ describe('Share (ticket 10, real DB)', () => {
 
     // The balance direction: this counterparty owes the User.
     expect(payload.text).toContain('Dana owes you');
-    expect(payload.text).toContain('₹15.00');
+    expect(payload.text).toContain('₹30.00');
     expect(payload.target.kind).toBe('phone');
     if (payload.target.kind === 'phone') {
       expect(decodeURIComponent(payload.target.deepLinkUrl)).toContain(
@@ -114,7 +114,7 @@ describe('Share (ticket 10, real DB)', () => {
 
     const payload = await share.shareBalance(decoded, { counterparty: 'Fay' });
     expect(payload.text).toContain('Fay owes you');
-    expect(payload.text).toContain('₹40.00');
+    expect(payload.text).toContain('₹80.00');
     expect(payload.target.kind).toBe('none');
   });
 

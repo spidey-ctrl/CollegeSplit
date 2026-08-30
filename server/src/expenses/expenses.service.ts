@@ -10,7 +10,7 @@ import {
   type ExpenseView,
   type ParticipantMatch,
 } from './dto.js';
-import { computeShares, withUserShare, type SplitMethod } from './split.js';
+import { computeShares, type SplitMethod } from './split.js';
 import { ContactsService } from '../contacts/contacts.service.js';
 import { resolveParticipant } from '../contacts/match.js';
 
@@ -33,18 +33,12 @@ export class ExpensesService {
     const participantInputs = body.participants ?? [];
     const isUserPayer = body.isUserPayer ?? true;
 
-    // The User always takes a share of their own Expense, so it is split among
-    // the User AND the others (the User's share is the remainder).
-    const userName = decoded.name ?? decoded.email ?? 'You';
+    // The Participants are the others who share the cost — the User is the
+    // Payer, never a Participant of their own Expense (see the Ledger model).
     const shares = computeShares(
       splitMethod as SplitMethod,
       amountPaise,
-      withUserShare(
-        splitMethod as SplitMethod,
-        amountPaise,
-        participantInputs.map((p) => ({ ...p })),
-        userName,
-      ),
+      participantInputs.map((p) => ({ ...p })),
     );
 
     const payerName =
@@ -117,16 +111,10 @@ export class ExpensesService {
     const participantInputs = body.participants ?? [];
     const isUserPayer = body.isUserPayer ?? existing.isUserPayer;
 
-    const userName = decoded.name ?? decoded.email ?? 'You';
     const shares = computeShares(
       splitMethod as SplitMethod,
       amountPaise,
-      withUserShare(
-        splitMethod as SplitMethod,
-        amountPaise,
-        participantInputs.map((p) => ({ ...p })),
-        userName,
-      ),
+      participantInputs.map((p) => ({ ...p })),
     );
 
     const payerName =

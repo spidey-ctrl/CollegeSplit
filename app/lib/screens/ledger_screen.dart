@@ -2,13 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../services/api_error.dart';
 import '../services/expense_service.dart';
+import '../services/share_launcher.dart';
 
 /// The User's private Ledger: who owes whom, as an aggregate Balance per
 /// counterparty (computed from their Expenses and Splits — ticket 02).
 class LedgerScreen extends StatefulWidget {
-  const LedgerScreen({super.key, required this.service});
+  const LedgerScreen({
+    super.key,
+    required this.service,
+    this.shareLauncher = const NativeShareLauncher(),
+  });
 
   final ExpenseService service;
+
+  /// Hand-off for the native share sheet when the User shares a Balance.
+  final ShareLauncher shareLauncher;
 
   @override
   State<LedgerScreen> createState() => LedgerScreenState();
@@ -115,17 +123,33 @@ class LedgerScreenState extends State<LedgerScreen> {
               fontSize: 16,
             ),
           ),
-          if (entry.contactId != null) ...[
-            const SizedBox(width: 4),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: 'Share balance with ${entry.counterparty}',
+            icon: const Icon(Icons.share_outlined),
+            onPressed: () => _share(entry),
+          ),
+          if (entry.contactId != null)
             IconButton(
               tooltip: 'Settle balance with ${entry.counterparty}',
               icon: const Icon(Icons.check_circle_outline),
               onPressed: () => _confirmAndSettle(entry),
             ),
-          ],
         ],
       ),
     );
+  }
+
+  /// Fetches the Share payload for this Balance and hands it to the native
+  /// share sheet (ticket 10). Pre-targets the counterparty's phone when on file.
+  Future<void> _share(LedgerEntry entry) async {
+    try {
+      final payload =
+          await widget.service.shareBalance(entry.counterparty);
+      await widget.shareLauncher.launch(payload);
+    } catch (e) {
+      if (mounted) setState(() => _error = friendlyError(e));
+    }
   }
 
   Future<void> _confirmAndSettle(LedgerEntry entry) async {
