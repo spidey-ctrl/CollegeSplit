@@ -6,10 +6,10 @@
 
 **Status:** ready-for-agent
 
-- [ ] `POST /voice/capture` accepts recorded audio, calls Sarvam for transcription (English + Hindi/Hinglish), then Gemini for structured extraction (amount, Payer, Participants, Equal Split Method, Category), and returns a draft Expense payload — nothing is persisted at this stage
-- [ ] Sarvam and Gemini are called only from the backend; API keys are never present in the Flutter client
-- [ ] The draft prefills the same edit screen from ticket 02; the User can correct any field before confirming, which then calls the same `POST /expenses` from ticket 02
-- [ ] When a required field (most importantly amount) can't be confidently extracted, it's left blank and highlighted on the edit screen rather than blocking entry or triggering a retry loop
-- [ ] Flutter: a mic-capture entry point wired to `POST /voice/capture` and into the edit screen
-- [ ] Backend integration tests use a fake Sarvam/Gemini provider (fixture transcripts and extractions) — no test hits the real paid APIs
-- [ ] Flutter integration test: tapping the mic (with a fake capture result) through to a prefilled edit screen and a confirmed Expense
+- [x] `POST /voice/capture` accepts recorded audio, calls Sarvam for transcription (English + Hindi/Hinglish), then Gemini for structured extraction (amount, Payer, Participants, Equal Split Method, Category), and returns a draft Expense payload — nothing is persisted at this stage
+- [x] Sarvam and Gemini are called only from the backend; API keys are never present in the Flutter client
+- [x] The draft prefills the same edit screen from ticket 02; the User can correct any field before confirming, which then calls the same `POST /expenses` from ticket 02
+- [x] When a required field (most importantly amount) can't be confidently extracted, it's left blank and highlighted on the edit screen rather than blocking entry or triggering a retry loop
+- [x] Flutter: a mic-capture entry point wired to `POST /voice/capture` and into the edit screen
+- [x] Backend integration tests use a fake Sarvam/Gemini provider (fixture transcripts and extractions) — no test hits the real paid APIs
+- [x] Flutter integration test: tapping the mic (with a fake capture result) through to a prefilled edit screen and a confirmed Expense

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
@@ -132,6 +133,61 @@ class Ledger {
       );
 }
 
+class VoiceDraftParticipant {
+  const VoiceDraftParticipant({required this.name});
+  final String name;
+
+  factory VoiceDraftParticipant.fromJson(Map<String, dynamic> json) =>
+      VoiceDraftParticipant(name: json['name'] as String);
+}
+
+/// A voice-capture draft returned by `POST /voice/capture` that prefills the
+/// add-expense form. Nothing is persisted here; the User confirms or edits it.
+///
+/// A `null` field whose name appears in [missingFields] could not be extracted
+/// confidently, so it should be left blank and highlighted on the form.
+class VoiceDraft {
+  const VoiceDraft({
+    required this.transcript,
+    required this.amountPaise,
+    required this.category,
+    required this.payerName,
+    required this.isUserPayer,
+    required this.splitMethod,
+    required this.participants,
+    required this.missingFields,
+  });
+
+  final String transcript;
+  final int? amountPaise;
+  final ExpenseCategory? category;
+  final String? payerName;
+  final bool isUserPayer;
+  final SplitMethod splitMethod;
+  final List<VoiceDraftParticipant> participants;
+  final List<String> missingFields;
+
+  bool get amountMissing => missingFields.contains('amount');
+  bool get categoryMissing => missingFields.contains('category');
+
+  factory VoiceDraft.fromJson(Map<String, dynamic> json) => VoiceDraft(
+        transcript: json['transcript'] as String,
+        amountPaise: json['amountPaise'] as int?,
+        category: json['category'] == null
+            ? null
+            : ExpenseCategory.fromApi(json['category'] as String),
+        payerName: json['payerName'] as String?,
+        isUserPayer: json['isUserPayer'] as bool,
+        splitMethod: SplitMethod.fromApi(json['splitMethod'] as String),
+        participants: (json['participants'] as List<dynamic>)
+            .map((p) => VoiceDraftParticipant.fromJson(p as Map<String, dynamic>))
+            .toList(),
+        missingFields: (json['missingFields'] as List<dynamic>)
+            .map((f) => f as String)
+            .toList(),
+      );
+}
+
 /// Calls the backend to create Expenses and read the User's private Ledger.
 class ExpenseService {
   ExpenseService({String? apiBaseUrl}) : _apiBaseUrl = apiBaseUrl ?? AuthService.apiBaseUrl;
@@ -202,5 +258,26 @@ class ExpenseService {
       throw Exception('GET /ledger failed (${res.statusCode})');
     }
     return Ledger.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  /// Sends recorded audio (WAV) to the voice pipeline and returns a prefilled
+  /// draft for the edit screen. Nothing is persisted server-side.
+  Future<VoiceDraft> captureVoice({
+    required Uint8List audioBytes,
+    required String mimeType,
+  }) async {
+    final token = await _idToken();
+    final res = await http.post(
+      Uri.parse('$_apiBaseUrl/voice/capture'),
+      headers: _headers(token),
+      body: jsonEncode({
+        'audioBase64': base64Encode(audioBytes),
+        'mimeType': mimeType,
+      }),
+    );
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception('POST /voice/capture failed (${res.statusCode}): ${res.body}');
+    }
+    return VoiceDraft.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 }

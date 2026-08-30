@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../services/expense_service.dart';
 import 'add_expense_screen.dart';
 import 'ledger_screen.dart';
+import 'voice_capture_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.user, required this.onSignOut});
@@ -25,6 +26,17 @@ class _HomeScreenState extends State<HomeScreen> {
     _ledgerKey.currentState?.refresh();
   }
 
+  void _openVoiceCapture() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VoiceCaptureScreen(
+          service: _expenseService,
+          onConfirm: _refreshLedger,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -32,6 +44,11 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('CollegeSplit'),
         actions: [
+          IconButton(
+            tooltip: 'Add expense by voice',
+            onPressed: _openVoiceCapture,
+            icon: const Icon(Icons.mic),
+          ),
           IconButton(
             tooltip: 'Sign out',
             onPressed: () async {

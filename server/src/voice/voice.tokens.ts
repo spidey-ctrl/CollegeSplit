@@ -1,0 +1,1 @@
+export const SARVAM_VOICE_PROVIDER = Symbol('SARVAM_VOICE_PROVIDER');

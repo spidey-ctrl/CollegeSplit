@@ -2,15 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../services/expense_service.dart';
 
-/// Form to manually add an Expense — amount, Category, Split Method and
-/// Participants — with no voice involved (ticket 02).
+/// Form to add an Expense — amount, Category, Split Method and Participants.
+///
+/// Used both for manual entry (ticket 02) and as the confirm/edit screen after a
+/// voice capture (ticket 03), where [draft] prefills the fields the app
+/// understood and [draft.missingFields] marks the ones it couldn't extract.
 class AddExpenseScreen extends StatefulWidget {
-  const AddExpenseScreen({super.key, required this.service, this.onAdded});
+  const AddExpenseScreen({super.key, required this.service, this.onAdded, this.draft});
 
   final ExpenseService service;
 
   /// Called after an Expense is successfully created (e.g. to refresh a Ledger).
   final VoidCallback? onAdded;
+
+  /// A voice-capture draft to prefill the form with (optional).
+  final VoiceDraft? draft;
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -32,12 +38,32 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   bool _busy = false;
   String? _error;
   String? _success;
+  // Field names the voice capture couldn't confidently extract. These stay
+  // blank and get a highlighted border until the User fills them in.
+  final Set<String> _highlighted = {};
 
   @override
   void initState() {
     super.initState();
-    _participants.add(_ParticipantRow());
-    _participants.add(_ParticipantRow());
+    final draft = widget.draft;
+    if (draft != null) {
+      _splitMethod = SplitMethod.equal;
+      if (draft.amountPaise != null) {
+        _amountController.text = _paiseToRupees(draft.amountPaise!);
+      }
+      if (draft.category != null) {
+        _category = draft.category!;
+      }
+      // One row per understood participant plus a trailing empty one.
+      for (final p in draft.participants) {
+        _participants.add(_ParticipantRow()..name.text = p.name);
+      }
+      _participants.add(_ParticipantRow());
+      _highlighted.addAll(draft.missingFields);
+    } else {
+      _participants.add(_ParticipantRow());
+      _participants.add(_ParticipantRow());
+    }
   }
 
   @override
@@ -152,21 +178,24 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (widget.draft != null) ..._draftBanner(colorScheme),
           TextField(
             controller: _amountController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
+            decoration: _fieldDecoration(
               labelText: 'Amount (₹)',
               prefixText: '₹ ',
-              border: OutlineInputBorder(),
+              highlighted: _highlighted.contains('amount'),
+              hint: _highlighted.contains('amount') ? 'Not understood' : null,
             ),
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<ExpenseCategory>(
             initialValue: _category,
-            decoration: const InputDecoration(
+            decoration: _fieldDecoration(
               labelText: 'Category',
-              border: OutlineInputBorder(),
+              highlighted: _highlighted.contains('category'),
+              hint: _highlighted.contains('category') ? 'Not understood' : null,
             ),
             items: ExpenseCategory.values
                 .map(
@@ -242,6 +271,56 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         ],
       ),
     );
+  }
+
+  /// Highlighted border (and hint) for a field the voice capture couldn't read.
+  InputDecoration _fieldDecoration({
+    required String labelText,
+    String? prefixText,
+    required bool highlighted,
+    String? hint,
+  }) {
+    return InputDecoration(
+      labelText: labelText,
+      prefixText: prefixText,
+      hintText: hint,
+      errorText: highlighted ? 'Could not detect — please enter it' : null,
+      border: const OutlineInputBorder(),
+    );
+  }
+
+  /// A banner shown when the form was prefilled from a voice capture.
+  List<Widget> _draftBanner(ColorScheme colorScheme) {
+    final draft = widget.draft!;
+    return [
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Voice capture',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '“${draft.transcript}”',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Review and confirm the fields below.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+    ];
   }
 
   Widget _participantField(int index) {
