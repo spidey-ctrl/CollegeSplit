@@ -55,7 +55,11 @@ export const DEFAULT_FIXTURES: VoiceFixture[] = [
       category: 'FoodDrink',
       payerName: null,
       isUserPayer: true,
-      participantNames: ['Alice', 'Bob'],
+      splitMethod: 'Equal',
+      participants: [
+        { name: 'Alice' },
+        { name: 'Bob' },
+      ],
       missingFields: [],
     },
   },
@@ -67,7 +71,8 @@ export const DEFAULT_FIXTURES: VoiceFixture[] = [
       category: 'Transport',
       payerName: 'Alice',
       isUserPayer: false,
-      participantNames: [],
+      splitMethod: 'Equal',
+      participants: [],
       missingFields: ['amount'],
     },
   },
@@ -79,8 +84,59 @@ export const DEFAULT_FIXTURES: VoiceFixture[] = [
       category: 'Groceries',
       payerName: null,
       isUserPayer: true,
-      participantNames: [],
+      splitMethod: 'Equal',
+      participants: [],
+      // The fake leaves this "unstated" to mirror an unsure extraction; the
+      // amount is still confidently known above.
       missingFields: ['amount'],
+    },
+  },
+  {
+    key: 'ratio-full',
+    transcript: 'Alex owes thirty percent and I will pay seventy percent for dinner.',
+    extraction: {
+      amountPaise: 10000,
+      category: 'FoodDrink',
+      payerName: null,
+      isUserPayer: true,
+      splitMethod: 'Ratio',
+      participants: [
+        { name: 'Alex', ratio: 30 },
+        { name: 'You', ratio: 70, isUser: true },
+      ],
+      missingFields: [],
+    },
+  },
+  {
+    key: 'ratio-rest',
+    transcript: 'Alex owes thirty percent, I will cover the rest of the taxi.',
+    extraction: {
+      amountPaise: 5000,
+      category: 'Transport',
+      payerName: null,
+      isUserPayer: true,
+      splitMethod: 'Ratio',
+      participants: [
+        { name: 'Alex', ratio: 30 },
+      ],
+      missingFields: [],
+    },
+  },
+  {
+    key: 'ratio-three',
+    transcript: 'For the trip, Alex pays forty, Bob pays thirty and I pay thirty percent.',
+    extraction: {
+      amountPaise: 30000,
+      category: 'Travel',
+      payerName: null,
+      isUserPayer: true,
+      splitMethod: 'Ratio',
+      participants: [
+        { name: 'Alex', ratio: 40 },
+        { name: 'Bob', ratio: 30 },
+        { name: 'You', ratio: 30, isUser: true },
+      ],
+      missingFields: [],
     },
   },
 ];

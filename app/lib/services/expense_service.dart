@@ -134,11 +134,22 @@ class Ledger {
 }
 
 class VoiceDraftParticipant {
-  const VoiceDraftParticipant({required this.name});
+  const VoiceDraftParticipant({required this.name, this.ratio, this.isUser = false});
+
   final String name;
 
+  /// Ratio weight for a Ratio split (Equal drafts omit it).
+  final int? ratio;
+
+  /// True when this participant represents the signed-in User.
+  final bool isUser;
+
   factory VoiceDraftParticipant.fromJson(Map<String, dynamic> json) =>
-      VoiceDraftParticipant(name: json['name'] as String);
+      VoiceDraftParticipant(
+        name: json['name'] as String,
+        ratio: json['ratio'] as int?,
+        isUser: json['isUser'] as bool? ?? false,
+      );
 }
 
 /// A voice-capture draft returned by `POST /voice/capture` that prefills the

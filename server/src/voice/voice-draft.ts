@@ -4,22 +4,48 @@ import {
   type VoiceDraftView,
 } from './voice-provider.js';
 
-/** Builds a ready-to-prefill edit-screen draft from a transcript + extraction. */
+/**
+ * Builds a ready-to-prefill edit-screen draft from a transcript + extraction.
+ *
+ * For a Ratio split, when the stated shares don't include the User (e.g. "Alex
+ * owes 30%, I'll cover the rest"), the remainder up to 100 is inferred as the
+ * signed-in User's own share so the edit screen prefills a complete Ratio.
+ */
 export function buildDraft(
   transcript: string,
   extraction: RawExtraction,
 ): VoiceDraftView {
-  const participants: VoiceDraftParticipant[] = extraction.participantNames.map(
-    (name) => ({ name }),
+  const participants: VoiceDraftParticipant[] = extraction.participants.map(
+    (p) => ({ name: p.name, ...(p.ratio !== undefined ? { ratio: p.ratio } : {}), ...(p.isUser ? { isUser: true } : {}) }),
   );
+
+  if (extraction.splitMethod === 'Ratio') {
+    inferUserRemainder(participants);
+  }
+
   return {
     transcript,
     amountPaise: extraction.amountPaise,
     category: extraction.category,
     payerName: extraction.payerName,
     isUserPayer: extraction.isUserPayer,
-    splitMethod: 'Equal',
+    splitMethod: extraction.splitMethod,
     participants,
     missingFields: extraction.missingFields,
   };
+}
+
+/** If no Participant is the User and the stated ratios leave a positive gap to
+ *  100, append the remainder as the User's own share. Never mutates a fully
+ *  specified split. */
+function inferUserRemainder(participants: VoiceDraftParticipant[]): void {
+  if (participants.some((p) => p.isUser === true)) return;
+  const ratios = participants.map((p) => p.ratio);
+  if (ratios.some((r) => typeof r !== 'number' || r <= 0)) return;
+
+  const sum = ratios.reduce((a, b) => (a as number) + (b as number), 0) as number;
+  const remainder = 100 - sum;
+  if (!Number.isInteger(remainder) || remainder <= 0) return;
+
+  participants.push({ name: 'You', ratio: remainder, isUser: true });
 }

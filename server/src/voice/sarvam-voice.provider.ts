@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import {
   type CaptureInput,
   type RawExtraction,
+  type RawExtractionParticipant,
   type VoiceProvider,
 } from './voice-provider.js';
 import { CATEGORIES } from '../expenses/dto.js';
@@ -124,9 +125,14 @@ export class SarvamVoiceProvider implements VoiceProvider {
       '- payerName: who paid. If it is the speaker (e.g. "I paid", "main gaya"), set isUserPayer true and ' +
         'payerName null. If an external person paid, set isUserPayer false and their name.',
       '- isUserPayer: true when the speaker/owner is the payer, false when an external named person paid.',
-      '- participantNames: the other people splitting the expense (free-text names). If only the speaker and a ' +
-        'lone other person split, include that other person. Empty when it is a personal expense.',
-      '- splitMethod: always "Equal" for this ticket.',
+      '- participants: the people sharing the expense EXCLUDING the speaker/User, plus the User only if named with an ' +
+        'explicit share. Each has a name and, for a Ratio split, an optional ratio (integer weight) and optional ' +
+        'isUser. If only the speaker and a lone other person split, include that other person. Empty when it is a ' +
+        'personal expense.',
+      '- splitMethod: "Equal" when everyone shares equally, or "Ratio" when shares are spoken as percentages or ' +
+        'weights (e.g. "Alex owes 30%"). For a Ratio split, list ONLY the explicitly-stated participants with their ' +
+        'ratios; NEVER invent a ratio for the speaker — the app infers the unstated remainder as the User\u2019s own share. ' +
+        'Mark a participant isUser true only when it is literally the speaker with an explicit stated share.',
       '',
       'Return ONLY valid JSON matching the schema. Never invent an amount that is not clearly stated.',
       '',
@@ -146,10 +152,19 @@ export class SarvamVoiceProvider implements VoiceProvider {
         },
         payerName: { type: ['string', 'null'], description: 'External payer name, or null.' },
         isUserPayer: { type: 'boolean', description: 'True if the owner is the payer.' },
-        participantNames: {
+        splitMethod: { type: 'string', enum: ['Equal', 'Ratio'], description: 'How the expense is split.' },
+        participants: {
           type: 'array',
-          items: { type: 'string' },
-          description: 'Other participants, free-text names.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Participant name.' },
+              ratio: { type: 'integer', description: 'Ratio weight for a Ratio split (or omitted).' },
+              isUser: { type: 'boolean', description: 'True if this participant is the speaker/User.' },
+            },
+            required: ['name'],
+          },
+          description: 'Participants sharing the expense (excluding the User unless named explicitly).',
         },
         missingFields: {
           type: 'array',
@@ -157,7 +172,7 @@ export class SarvamVoiceProvider implements VoiceProvider {
           description: "Fields ('amount', 'category', 'payerName') that could not be confidently extracted.",
         },
       },
-      required: ['amountPaise', 'category', 'payerName', 'isUserPayer', 'participantNames', 'missingFields'],
+      required: ['amountPaise', 'category', 'payerName', 'isUserPayer', 'splitMethod', 'participants', 'missingFields'],
     };
   }
 
@@ -172,10 +187,11 @@ export class SarvamVoiceProvider implements VoiceProvider {
     const category = this.asCategory(raw.category);
     const payerName = this.asString(raw.payerName);
     const isUserPayer = typeof raw.isUserPayer === 'boolean' ? raw.isUserPayer : true;
-    const participantNames = Array.isArray(raw.participantNames)
-      ? (raw.participantNames as unknown[])
-          .map((p) => this.asString(p))
-          .filter((n): n is string => n !== null && n.length > 0)
+    const splitMethod = raw.splitMethod === 'Ratio' ? 'Ratio' : 'Equal';
+    const participants = Array.isArray(raw.participants)
+      ? (raw.participants as unknown[])
+          .map((p) => this.asParticipant(p))
+          .filter((p): p is RawExtractionParticipant => p !== null)
       : [];
 
     // Derive missingFields from whatever could not be confidently extracted.
@@ -191,9 +207,20 @@ export class SarvamVoiceProvider implements VoiceProvider {
       category,
       payerName,
       isUserPayer,
-      participantNames,
+      splitMethod,
+      participants,
       missingFields: Array.from(missing),
     };
+  }
+
+  private asParticipant(v: unknown): RawExtractionParticipant | null {
+    if (typeof v !== 'object' || v === null) return null;
+    const o = v as Record<string, unknown>;
+    const name = this.asString(o.name);
+    if (name === null) return null;
+    const ratio = this.asPosInt(o.ratio);
+    const isUser = typeof o.isUser === 'boolean' ? o.isUser : false;
+    return { name, ...(ratio !== null ? { ratio } : {}), ...(isUser ? { isUser: true } : {}) };
   }
 
   private base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {

@@ -8,9 +8,18 @@ export interface CaptureInput {
   mimeType: string;
 }
 
-/** A single Participant name extracted from speech (Equal split, ticket 03). */
+/**
+ * A single Participant in a Draft.
+ *
+ * For an Equal split (ticket 03) only `name` is set. For a Ratio split
+ * (ticket 04) the participant carries its stated integer `ratio` weight, and
+ * `isUser` marks the participant representing the signed-in User (including a
+ * remainder inferred as the User's own share).
+ */
 export interface VoiceDraftParticipant {
   name: string;
+  ratio?: number;
+  isUser?: boolean;
 }
 
 /**
@@ -31,11 +40,18 @@ export interface VoiceDraftView {
   payerName: string | null;
   /** Whether the Payer is the signed-in User. Defaults to true. */
   isUserPayer: boolean;
-  /** Ticket 03 only supports Equal split; the edit screen can change it. */
-  splitMethod: 'Equal';
+  /** Equal (ticket 03) or Ratio (ticket 04); the edit screen can change it. */
+  splitMethod: 'Equal' | 'Ratio';
   participants: VoiceDraftParticipant[];
   /** Field names that couldn't be confidently extracted, e.g. ['amount']. */
   missingFields: string[];
+}
+
+/** A Participant as extracted: name, optional ratio weight, optional isUser. */
+export interface RawExtractionParticipant {
+  name: string;
+  ratio?: number;
+  isUser?: boolean;
 }
 
 /** The raw extraction result as Gemini returns it (already validated). */
@@ -44,7 +60,8 @@ export interface RawExtraction {
   category: string | null;
   payerName: string | null;
   isUserPayer: boolean;
-  participantNames: string[];
+  splitMethod: 'Equal' | 'Ratio';
+  participants: RawExtractionParticipant[];
   missingFields: string[];
 }
 

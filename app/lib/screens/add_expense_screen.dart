@@ -47,16 +47,22 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     super.initState();
     final draft = widget.draft;
     if (draft != null) {
-      _splitMethod = SplitMethod.equal;
+      _splitMethod = draft.splitMethod;
       if (draft.amountPaise != null) {
         _amountController.text = _paiseToRupees(draft.amountPaise!);
       }
       if (draft.category != null) {
         _category = draft.category!;
       }
-      // One row per understood participant plus a trailing empty one.
+      // One row per understood participant (name + ratio for a Ratio split)
+      // plus a trailing empty one for adding more.
       for (final p in draft.participants) {
-        _participants.add(_ParticipantRow()..name.text = p.name);
+        final row = _ParticipantRow();
+        row.name.text = p.name;
+        if (p.ratio != null) {
+          row.value.text = p.ratio.toString();
+        }
+        _participants.add(row);
       }
       _participants.add(_ParticipantRow());
       _highlighted.addAll(draft.missingFields);

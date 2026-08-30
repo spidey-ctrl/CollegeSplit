@@ -32,6 +32,7 @@ class _FakeExpenseService extends ExpenseService {
   Uint8List? capturedBytes;
   int? capturedAmountPaise;
   ExpenseCategory? capturedCategory;
+  List<ExpenseParticipant> capturedParticipants = const [];
 
   @override
   Future<VoiceDraft> captureVoice({
@@ -53,6 +54,7 @@ class _FakeExpenseService extends ExpenseService {
   }) async {
     capturedAmountPaise = amountPaise;
     capturedCategory = category;
+    capturedParticipants = participants;
     return expense!;
   }
 }
@@ -96,6 +98,22 @@ VoiceDraft _missingAmountDraft() => const VoiceDraft(
         VoiceDraftParticipant(name: 'Charlie'),
       ],
       missingFields: ['amount'],
+    );
+
+/// A Ratio draft with a stated Alex 30% and an inferred User 70% ("I'll cover
+/// the rest"), as produced by the backend ratio-rest inference (ticket 04).
+VoiceDraft _ratioDraft() => const VoiceDraft(
+      transcript: 'Alex owes thirty percent, I will cover the rest of the taxi.',
+      amountPaise: 5000,
+      category: ExpenseCategory.transport,
+      payerName: null,
+      isUserPayer: true,
+      splitMethod: SplitMethod.ratio,
+      participants: [
+        VoiceDraftParticipant(name: 'Alex', ratio: 30),
+        VoiceDraftParticipant(name: 'You', ratio: 70, isUser: true),
+      ],
+      missingFields: [],
     );
 
 Future<void> _driveRecording(
@@ -189,5 +207,47 @@ void main() {
 
     expect(service.capturedAmountPaise, 5000);
     expect(service.capturedCategory, ExpenseCategory.transport);
+  });
+
+  testWidgets('a Ratio-split draft prefills the edit screen and is editable',
+      (tester) async {
+    final service = _FakeExpenseService(
+      draft: _ratioDraft(),
+      expense: _expense(amountPaise: 5000),
+    );
+    final recorder = _FakeVoiceRecorder();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: VoiceCaptureScreen(
+          service: service,
+          onConfirm: () {},
+          recorder: recorder,
+        ),
+      ),
+    );
+
+    await _driveRecording(tester, recorder);
+
+    // Ratio is active and both the stated and inferred shares are prefilled.
+    expect(find.widgetWithText(TextField, 'Alex'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'You'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '30'), findsOneWidget); // stated
+    expect(find.widgetWithText(TextField, '70'), findsOneWidget); // inferred remainder
+
+    // Editable: adjust Alex's share and confirm — the edited ratio is submitted.
+    await tester.enterText(
+      find.widgetWithText(TextField, '30'),
+      '40',
+    );
+    await _tapAddExpense(tester);
+
+    expect(service.capturedAmountPaise, 5000);
+    final alex = service.capturedParticipants
+        .firstWhere((p) => p.name == 'Alex');
+    expect(alex.ratio, 40);
+    expect(alex.isUser, isFalse);
+    final me = service.capturedParticipants
+        .firstWhere((p) => p.isUser || p.name == 'You');
+    expect(me.ratio, 70);
   });
 }

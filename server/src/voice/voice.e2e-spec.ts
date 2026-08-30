@@ -8,7 +8,7 @@ function audio(key: string): string {
   return Buffer.from(key, 'utf8').toString('base64');
 }
 
-describe('Voice capture (ticket 03, fake provider)', () => {
+describe('Voice capture (tickets 03 & 04, fake provider)', () => {
   const makeService = () => new VoiceService(new FakeVoiceProvider());
 
   it('turns a full utterance into an Equal-split draft for the edit screen', async () => {
@@ -53,6 +53,52 @@ describe('Voice capture (ticket 03, fake provider)', () => {
     expect(draft.participants).toEqual([]);
     expect(draft.category).toBe('Groceries');
     expect(draft.amountPaise).toBe(750);
+  });
+
+  it('recognizes a fully-specified Ratio split and prefills both shares', async () => {
+    const service = makeService();
+    const draft = await service.capture({
+      audioBase64: audio('ratio-full'),
+      mimeType: 'audio/wav',
+    });
+
+    expect(draft.splitMethod).toBe('Ratio');
+    const pts = draft.participants;
+    expect(pts).toHaveLength(2);
+    expect(pts[0]).toMatchObject({ name: 'Alex', ratio: 30 });
+    expect(pts[1]).toMatchObject({ name: 'You', ratio: 70, isUser: true });
+    // Fully-specified: no extra inference.
+    expect(draft.missingFields).toEqual([]);
+  });
+
+  it('infers the unstated remainder as the User\u2019s own Ratio share', async () => {
+    const service = makeService();
+    const draft = await service.capture({
+      audioBase64: audio('ratio-rest'),
+      mimeType: 'audio/wav',
+    });
+
+    expect(draft.splitMethod).toBe('Ratio');
+    // Alex (30) is stated; the User\u2019s 70 is inferred to sum to 100.
+    expect(draft.participants).toEqual([
+      { name: 'Alex', ratio: 30 },
+      { name: 'You', ratio: 70, isUser: true },
+    ]);
+  });
+
+  it('handles a 3+-Participant Ratio split with a stated User share', async () => {
+    const service = makeService();
+    const draft = await service.capture({
+      audioBase64: audio('ratio-three'),
+      mimeType: 'audio/wav',
+    });
+
+    expect(draft.splitMethod).toBe('Ratio');
+    expect(draft.participants).toEqual([
+      { name: 'Alex', ratio: 40 },
+      { name: 'Bob', ratio: 30 },
+      { name: 'You', ratio: 30, isUser: true },
+    ]);
   });
 
   it('rejects audio the provider cannot match (nothing persisted)', async () => {
