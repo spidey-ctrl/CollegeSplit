@@ -46,6 +46,9 @@ export interface ExpenseView {
   payerName: string;
   isUserPayer: boolean;
   splitMethod: string;
+  // Whether the running Balance this Expense contributed to has been settled
+  // (ticket 07). Editing or deleting a settled Expense reopens that Balance.
+  settled: boolean;
   createdAt: string;
   participants: ParticipantView[];
 }

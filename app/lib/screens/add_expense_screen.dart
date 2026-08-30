@@ -10,12 +10,14 @@ import '../services/expense_service.dart';
 /// Used both for manual entry (ticket 02) and as the confirm/edit screen after a
 /// voice capture (ticket 03), where [draft] prefills the fields the app
 /// understood and [draft.missingFields] marks the ones it couldn't extract.
+/// Also used to edit a past Expense (ticket 08) by passing [existingExpense].
 class AddExpenseScreen extends StatefulWidget {
   const AddExpenseScreen({
     super.key,
     required this.service,
     this.onAdded,
     this.draft,
+    this.existingExpense,
     this.deviceContacts,
   });
 
@@ -26,6 +28,10 @@ class AddExpenseScreen extends StatefulWidget {
 
   /// A voice-capture draft to prefill the form with (optional).
   final VoiceDraft? draft;
+
+  /// A saved Expense to edit (optional, ticket 08). Mutually exclusive with
+  /// [draft]; when set the form prefills and submits a PATCH instead of a POST.
+  final Expense? existingExpense;
 
   /// Injectable for tests; defaults to the real device contact list.
   final DeviceContacts? deviceContacts;
@@ -42,6 +48,8 @@ class _ParticipantRow {
   final TextEditingController value = TextEditingController();
   // Optional phone number used to resolve this Participant to a Contact.
   final TextEditingController phone = TextEditingController();
+  // Whether this row represents the owning User (external-Payer Expenses).
+  bool isUser = false;
 }
 
 class _AddExpenseScreenState extends State<AddExpenseScreen> {
@@ -66,11 +74,30 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   // device-contacts lookup after the User pauses.
   final Map<_ParticipantRow, Timer> _autoSuggestTimers = {};
 
+  bool get _isEditing => widget.existingExpense != null;
+
   @override
   void initState() {
     super.initState();
     final draft = widget.draft;
-    if (draft != null) {
+    final existing = widget.existingExpense;
+    if (existing != null) {
+      _splitMethod = existing.splitMethod;
+      _amountController.text = _paiseToRupees(existing.amountPaise);
+      _category = existing.category;
+      for (final p in existing.participants) {
+        final row = _ParticipantRow();
+        row.name.text = p.name;
+        row.isUser = p.isUser;
+        // The ratio weight isn't stored on the shard, so a Ratio split needs
+        // the User to re-enter weights; an Adhoc share is recoverable exactly.
+        if (_splitMethod == SplitMethod.adhoc) {
+          row.value.text = _paiseToRupees(p.sharePaise);
+        }
+        _participants.add(row);
+      }
+      _participants.add(_ParticipantRow());
+    } else if (draft != null) {
       _splitMethod = draft.splitMethod;
       if (draft.amountPaise != null) {
         _amountController.text = _paiseToRupees(draft.amountPaise!);
@@ -83,6 +110,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       for (final p in draft.participants) {
         final row = _ParticipantRow();
         row.name.text = p.name;
+        row.isUser = p.isUser;
         if (p.ratio != null) {
           row.value.text = p.ratio.toString();
         }
@@ -161,7 +189,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       switch (_splitMethod) {
         case SplitMethod.equal:
           participants.add(
-            ExpenseParticipant(name: name, phoneNumber: phone.isEmpty ? null : phone),
+            ExpenseParticipant(
+              name: name,
+              phoneNumber: phone.isEmpty ? null : phone,
+              isUser: row.isUser,
+            ),
           );
           break;
         case SplitMethod.ratio:
@@ -175,6 +207,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               name: name,
               ratio: ratio,
               phoneNumber: phone.isEmpty ? null : phone,
+              isUser: row.isUser,
             ),
           );
           break;
@@ -190,6 +223,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               name: name,
               sharePaise: share,
               phoneNumber: phone.isEmpty ? null : phone,
+              isUser: row.isUser,
             ),
           );
           break;
@@ -203,6 +237,22 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     });
 
     try {
+      final existing = widget.existingExpense;
+      if (existing != null) {
+        final updated = await widget.service.updateExpense(
+          id: existing.id,
+          amountPaise: amountPaise,
+          category: _category,
+          splitMethod: _splitMethod,
+          payerName: existing.payerName,
+          isUserPayer: existing.isUserPayer,
+          participants: participants,
+        );
+        widget.onAdded?.call();
+        if (mounted) Navigator.of(context).pop(updated);
+        return;
+      }
+
       final expense = await widget.service.createExpense(
         amountPaise: amountPaise,
         category: _category,
@@ -228,9 +278,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       });
       widget.onAdded?.call();
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
-      setState(() => _busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -388,7 +438,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.check),
-            label: Text(_busy ? 'Adding…' : 'Add Expense'),
+            label: Text(
+              _busy
+                  ? (_isEditing ? 'Saving…' : 'Adding…')
+                  : (_isEditing ? 'Save Changes' : 'Add Expense'),
+            ),
           ),
         ],
       ),

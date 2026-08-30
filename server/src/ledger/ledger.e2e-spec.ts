@@ -10,7 +10,7 @@ describe('Expenses + Ledger (ticket 02, real DB)', () => {
   let prisma: PrismaService;
   let expenses: ExpensesService;
   let ledger: LedgerService;
-  const TEST_UID = `test-${Date.now()}`;
+  const TEST_UID = `test-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
   const decoded: DecodedIdToken = {
     uid: TEST_UID,

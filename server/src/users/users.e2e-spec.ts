@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 
 describe('User persistence (ticket 01 walking skeleton)', () => {
   let prisma: PrismaService;
-  const TEST_UID = `test-${Date.now()}`;
+  const TEST_UID = `test-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
   beforeAll(() => {
     prisma = new PrismaService();

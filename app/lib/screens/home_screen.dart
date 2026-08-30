@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/expense_service.dart';
 import 'add_expense_screen.dart';
+import 'expense_history_screen.dart';
 import 'ledger_screen.dart';
 import 'voice_capture_screen.dart';
 
@@ -91,7 +92,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: IndexedStack(
               index: _index,
               children: [
-                const _PlaceholderTab(label: 'Carry Debt'),
+                ExpenseHistoryScreen(
+                  service: _expenseService,
+                  onChanged: _refreshLedger,
+                ),
                 AddExpenseScreen(
                   service: _expenseService,
                   onAdded: _refreshLedger,
@@ -106,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.paid_outlined), label: 'Debt'),
+          NavigationDestination(icon: Icon(Icons.history), label: 'History'),
           NavigationDestination(
             icon: Icon(Icons.add_circle_outline),
             label: 'Expense',
@@ -115,26 +119,6 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.account_balance_wallet_outlined),
             label: 'Balance',
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlaceholderTab extends StatelessWidget {
-  const _PlaceholderTab({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.construction, size: 48),
-          const SizedBox(height: 12),
-          Text(label, style: Theme.of(context).textTheme.titleLarge),
         ],
       ),
     );

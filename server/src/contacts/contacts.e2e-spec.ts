@@ -9,7 +9,7 @@ describe('Contacts (ticket 05, real DB)', () => {
   let prisma: PrismaService;
   let contacts: ContactsService;
   let expenses: ExpensesService;
-  const TEST_UID = `test-${Date.now()}`;
+  const TEST_UID = `test-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
   const decoded: DecodedIdToken = {
     uid: TEST_UID,

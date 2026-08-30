@@ -104,6 +104,7 @@ class Expense {
     required this.payerName,
     required this.isUserPayer,
     required this.splitMethod,
+    this.settled = false,
     required this.createdAt,
     required this.participants,
   });
@@ -114,6 +115,10 @@ class Expense {
   final String payerName;
   final bool isUserPayer;
   final SplitMethod splitMethod;
+
+  /// Whether the running Balance this Expense contributed to has been settled
+  /// (ticket 07). Editing or deleting a settled Expense reopens that Balance.
+  final bool settled;
   final DateTime createdAt;
   final List<ExpenseParticipant> participants;
 
@@ -124,6 +129,7 @@ class Expense {
         payerName: json['payerName'] as String,
         isUserPayer: json['isUserPayer'] as bool,
         splitMethod: SplitMethod.fromApi(json['splitMethod'] as String),
+        settled: json['settled'] as bool? ?? false,
         createdAt: DateTime.parse(json['createdAt'] as String),
         participants: (json['participants'] as List<dynamic>)
             .map(
@@ -267,7 +273,8 @@ class VoiceDraft {
       );
 }
 
-/// Calls the backend to create Expenses and read the User's private Ledger.
+/// Calls the backend to create/read/edit/delete Expenses and read the User's
+/// private Ledger.
 class ExpenseService {
   ExpenseService({String? apiBaseUrl}) : _apiBaseUrl = apiBaseUrl ?? AuthService.apiBaseUrl;
 
@@ -302,30 +309,118 @@ class ExpenseService {
     final res = await http.post(
       Uri.parse('$_apiBaseUrl/expenses'),
       headers: _headers(token),
-      body: jsonEncode({
-        'amountPaise': amountPaise,
-        'category': category.apiValue,
-        'splitMethod': splitMethod.apiValue,
-        'payerName': ?payerName,
-        'isUserPayer': isUserPayer,
-        'participants': participants
-            .map(
-              (p) => {
-                'name': p.name,
-                if (p.phoneNumber != null && p.phoneNumber!.isNotEmpty)
-                  'phoneNumber': p.phoneNumber,
-                if (p.ratio != null) 'ratio': p.ratio,
-                if (splitMethod == SplitMethod.adhoc) 'sharePaise': p.sharePaise,
-                'isUser': p.isUser,
-              },
-            )
-            .toList(),
-      }),
+      body: jsonEncode(
+        _expenseBody(
+          amountPaise: amountPaise,
+          category: category,
+          splitMethod: splitMethod,
+          payerName: payerName,
+          isUserPayer: isUserPayer,
+          participants: participants,
+        ),
+      ),
     );
     if (res.statusCode != 201 && res.statusCode != 200) {
       throw Exception('POST /expenses failed (${res.statusCode}): ${res.body}');
     }
     return Expense.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  /// Fetches every Expense in the signed-in User's history, newest first
+  /// (ticket 08). Settled Expenses are included so the history can show their
+  /// settled state and still offer edit/delete.
+  Future<List<Expense>> listExpenses() async {
+    final token = await _idToken();
+    final res = await http.get(
+      Uri.parse('$_apiBaseUrl/expenses'),
+      headers: _headers(token),
+    );
+    if (res.statusCode != 200) {
+      throw Exception('GET /expenses failed (${res.statusCode}): ${res.body}');
+    }
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list
+        .map((e) => Expense.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Edits a saved Expense (ticket 08). Editing a settled Expense reopens the
+  /// Balance it belonged to.
+  Future<Expense> updateExpense({
+    required String id,
+    required int amountPaise,
+    required ExpenseCategory category,
+    required SplitMethod splitMethod,
+    String? payerName,
+    bool isUserPayer = true,
+    List<ExpenseParticipant> participants = const [],
+  }) async {
+    final token = await _idToken();
+    final res = await http.patch(
+      Uri.parse('$_apiBaseUrl/expenses/$id'),
+      headers: _headers(token),
+      body: jsonEncode(
+        _expenseBody(
+          amountPaise: amountPaise,
+          category: category,
+          splitMethod: splitMethod,
+          payerName: payerName,
+          isUserPayer: isUserPayer,
+          participants: participants,
+        ),
+      ),
+    );
+    if (res.statusCode != 200) {
+      throw Exception(
+        'PATCH /expenses/$id failed (${res.statusCode}): ${res.body}',
+      );
+    }
+    return Expense.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  /// Deletes a saved Expense (ticket 08). Deleting a settled Expense reopens
+  /// the Balance it belonged to.
+  Future<void> deleteExpense(String id) async {
+    final token = await _idToken();
+    final res = await http.delete(
+      Uri.parse('$_apiBaseUrl/expenses/$id'),
+      headers: _headers(token),
+    );
+    if (res.statusCode != 200 && res.statusCode != 204) {
+      throw Exception(
+        'DELETE /expenses/$id failed (${res.statusCode}): ${res.body}',
+      );
+    }
+  }
+
+  /// Builds the request body shared by create and update.
+  Map<String, dynamic> _expenseBody({
+    required int amountPaise,
+    required ExpenseCategory category,
+    required SplitMethod splitMethod,
+    String? payerName,
+    bool isUserPayer = true,
+    required List<ExpenseParticipant> participants,
+  }) {
+    return {
+      'amountPaise': amountPaise,
+      'category': category.apiValue,
+      'splitMethod': splitMethod.apiValue,
+      'payerName': ?payerName,
+      'isUserPayer': isUserPayer,
+      'participants': participants
+          .map(
+            (p) => {
+              'name': p.name,
+              if (p.phoneNumber != null && p.phoneNumber!.isNotEmpty)
+                'phoneNumber': p.phoneNumber,
+              if (p.ratio != null) 'ratio': p.ratio,
+              if (splitMethod == SplitMethod.adhoc) 'sharePaise': p.sharePaise,
+              'isUser': p.isUser,
+            },
+          )
+          .toList(),
+    };
   }
 
   /// Fetches the signed-in User's aggregate per-counterparty Balance.
